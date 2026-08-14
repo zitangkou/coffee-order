@@ -75,7 +75,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { onLoad } from "@dcloudio/uni-app";
+import { onLoad, onUnload } from "@dcloudio/uni-app";
 import { api } from "../../api";
 import { ORDER_STATUS_TEXT, type Order, type OrderStatus } from "../../types";
 
@@ -83,6 +83,8 @@ const order = ref<Order | null>(null);
 const showRefund = ref(false);
 const refundReason = ref("");
 const reasons = ["不想要了", "点错了", "等待太久", "品质问题", "其他"];
+let timer: any = null;
+let prevStatus = "";
 
 const steps = [
   { key: "PAID", label: "已支付" },
@@ -108,10 +110,36 @@ onLoad(async (options) => {
   const id = Number((options as any)?.id);
   try {
     order.value = await api.getOrder(id);
+    prevStatus = order.value.status;
+    startPolling(id);
   } catch (e: any) {
     uni.showToast({ title: e.message || "加载失败", icon: "none" });
   }
 });
+
+onUnload(() => {
+  if (timer) clearInterval(timer);
+});
+
+function startPolling(id: number) {
+  if (timer) clearInterval(timer);
+  timer = setInterval(async () => {
+    try {
+      const latest = await api.getOrder(id);
+      const changed = latest.status !== prevStatus;
+      prevStatus = latest.status;
+      order.value = latest;
+      if (changed && latest.status === "READY") {
+        uni.showToast({ title: "咖啡已好，请取餐", icon: "none" });
+      }
+      if (["COMPLETED", "REFUNDED", "CANCELLED"].includes(latest.status)) {
+        clearInterval(timer);
+      }
+    } catch {
+      // 轮询失败静默，下次再试
+    }
+  }, 10000);
+}
 
 function specsText(specs: Record<string, string | string[]>) {
   return Object.values(specs || {}).flat().join(" / ") || "标准";

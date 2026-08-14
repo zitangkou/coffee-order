@@ -1,6 +1,7 @@
 <template>
   <view class="page">
     <view class="card" v-for="p in products" :key="p.id">
+      <image v-if="p.imageUrl" :src="imgUrl(p.imageUrl)" mode="aspectFill" class="p-img" />
       <view class="p-top">
         <view class="p-name">
           {{ p.name }}
@@ -15,6 +16,7 @@
         <text v-if="p.flavorNotes" class="text-sub">{{ p.flavorNotes }}</text>
       </view>
       <view class="p-actions">
+        <view class="mini-btn" @tap="uploadImage(p)">传图</view>
         <view class="mini-btn" @tap="toggleSoldOut(p)">{{ p.isSoldOut ? "恢复在售" : "标记售罄" }}</view>
         <view class="mini-btn" @tap="toggleActive(p)">{{ p.isActive ? "下架" : "上架" }}</view>
         <view class="mini-btn" @tap="openEdit(p)">编辑</view>
@@ -59,6 +61,7 @@
 import { reactive, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { api } from "../../api";
+import { API_BASE, STORAGE_KEYS } from "../../config";
 import type { Product } from "../../types";
 
 const products = ref<Product[]>([]);
@@ -81,6 +84,39 @@ async function load() {
 
 function catName(id: number) {
   return cats.value.find((c) => c.id === id)?.name || "";
+}
+
+function imgUrl(url: string) {
+  return API_BASE.replace(/\/api$/, "") + url;
+}
+
+function uploadImage(p: Product) {
+  uni.chooseImage({
+    count: 1,
+    success: (res) => {
+      const filePath = res.tempFilePaths[0];
+      uni.uploadFile({
+        url: API_BASE + `/admin/products/${p.id}/image`,
+        filePath,
+        name: "file",
+        header: { Authorization: `Bearer ${uni.getStorageSync(STORAGE_KEYS.adminToken)}` },
+        success: (up) => {
+          try {
+            const body = JSON.parse(up.data as string);
+            if (body.code === 0) {
+              uni.showToast({ title: "上传成功", icon: "success" });
+              load();
+            } else {
+              uni.showToast({ title: body.msg || "上传失败", icon: "none" });
+            }
+          } catch {
+            uni.showToast({ title: "上传失败", icon: "none" });
+          }
+        },
+        fail: () => uni.showToast({ title: "上传失败", icon: "none" }),
+      });
+    },
+  });
 }
 
 function openCreate() {
@@ -191,6 +227,14 @@ async function remove(p: Product) {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.p-img {
+  width: 100%;
+  height: 240rpx;
+  border-radius: 12px;
+  margin-bottom: 16rpx;
+  background: #f0e9df;
 }
 
 .p-name {

@@ -38,11 +38,22 @@
 
     <view class="btn-primary" @tap="save">保存设置</view>
     <view class="btn-outline test-btn" @tap="testPrinter">测试打印</view>
+
+    <view class="card pwd-card">
+      <view class="section-title">修改密码</view>
+      <view class="f-label">旧密码</view>
+      <input v-model="oldPassword" class="f-input" password placeholder="当前密码" />
+      <view class="f-label">新密码（至少 6 位）</view>
+      <input v-model="newPassword" class="f-input" password placeholder="新密码" />
+      <view class="f-label">确认新密码</view>
+      <input v-model="confirmPassword" class="f-input" password placeholder="再次输入新密码" />
+      <view class="btn-primary pwd-btn" @tap="changePassword">修改密码</view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { reactive } from "vue";
+import { reactive, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { api } from "../../api";
 
@@ -58,6 +69,9 @@ const form = reactive<Record<string, any>>({
   refundEnabled: true,
   takeoutPhoneRequired: false,
 });
+const oldPassword = ref("");
+const newPassword = ref("");
+const confirmPassword = ref("");
 
 onShow(async () => {
   try {
@@ -88,6 +102,30 @@ async function testPrinter() {
     uni.showToast({ title: e.message || "发送失败", icon: "none" });
   }
 }
+
+async function changePassword() {
+  if (!oldPassword.value || !newPassword.value) {
+    uni.showToast({ title: "请填写完整", icon: "none" });
+    return;
+  }
+  if (newPassword.value.length < 6) {
+    uni.showToast({ title: "新密码至少 6 位", icon: "none" });
+    return;
+  }
+  if (newPassword.value !== confirmPassword.value) {
+    uni.showToast({ title: "两次输入的新密码不一致", icon: "none" });
+    return;
+  }
+  try {
+    await api.adminChangePassword(oldPassword.value, newPassword.value);
+    oldPassword.value = "";
+    newPassword.value = "";
+    confirmPassword.value = "";
+    uni.showToast({ title: "密码已修改", icon: "success" });
+  } catch (e: any) {
+    uni.showToast({ title: e.message || "修改失败", icon: "none" });
+  }
+}
 </script>
 
 <style lang="scss" scoped>
@@ -114,5 +152,13 @@ async function testPrinter() {
 
 .test-btn {
   margin-top: 20rpx;
+}
+
+.pwd-card {
+  margin-top: 24rpx;
+}
+
+.pwd-btn {
+  margin-top: 24rpx;
 }
 </style>

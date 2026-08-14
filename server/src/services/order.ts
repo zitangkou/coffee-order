@@ -211,3 +211,21 @@ export async function handleRefund(
   ]);
   return prisma.refund.findUnique({ where: { id: refundId }, include: { order: true } });
 }
+
+export async function cancelStaleOrders() {
+  const timeoutMin = Number(process.env.ORDER_TIMEOUT_MINUTES || 15);
+  const cutoff = new Date(Date.now() - timeoutMin * 60_000);
+  const stale = await prisma.order.findMany({
+    where: { status: "UNPAID", createdAt: { lt: cutoff } },
+    select: { id: true },
+  });
+  for (const o of stale) {
+    await prisma.order
+      .update({ where: { id: o.id }, data: { status: "CANCELLED" } })
+      .catch(() => undefined);
+  }
+  if (stale.length) {
+    console.log(`[cron] 自动取消 ${stale.length} 个超时未支付订单`);
+  }
+  return stale.length;
+}

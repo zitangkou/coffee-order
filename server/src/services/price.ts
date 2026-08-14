@@ -10,10 +10,11 @@ export function calcUnitPrice(
   let total = Number(product.price);
   const specDefs = parseJson<Record<
     string,
-    { label: string; extra: number }[]
+    { label: string; extra: number }[] | { options: { label: string; extra: number }[]; multiple?: boolean }
   >>(product.specsJson, {});
   for (const [key, value] of Object.entries(specs)) {
-    const defs = specDefs[key] ?? [];
+    const raw = specDefs[key];
+    const defs = Array.isArray(raw) ? raw : raw?.options ?? [];
     const selected = Array.isArray(value) ? value : [value];
     for (const s of selected) {
       const def = defs.find((d) => d.label === s);

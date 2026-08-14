@@ -5,6 +5,15 @@
       <view class="mini-btn" @tap="addTable">新增</view>
     </view>
 
+    <view class="card takeout-row">
+      <view>
+        <view class="takeout-title">外带码</view>
+        <view class="text-sub">吧台专用，扫码直接进入外带模式</view>
+      </view>
+      <view class="mini-btn" @tap="genTakeout">{{ takeoutQr ? "重新生成" : "生成" }}</view>
+      <view v-if="takeoutQr" class="mini-btn" @tap="showImage(takeoutQr)">查看</view>
+    </view>
+
     <view class="card" v-for="t in tables" :key="t.id">
       <view class="t-row">
         <view class="t-no">
@@ -36,6 +45,7 @@ import type { Table } from "../../types";
 
 const tables = ref<Table[]>([]);
 const newTable = ref("");
+const takeoutQr = ref("");
 
 onShow(load);
 
@@ -82,13 +92,31 @@ async function qr(t: Table) {
 }
 
 function openQr(t: Table) {
-  const full = API_BASE.replace(/\/api$/, "") + t.qrCodeUrl;
+  showImage(t.qrCodeUrl || "");
+}
+
+function showImage(path: string) {
+  const full = API_BASE.replace(/\/api$/, "") + path;
   // #ifdef H5
   window.open(full, "_blank");
   // #endif
   // #ifndef H5
   uni.previewImage({ urls: [full] });
   // #endif
+}
+
+async function genTakeout() {
+  try {
+    uni.showLoading({ title: "生成中" });
+    const data = await api.adminTakeoutQrcode();
+    uni.hideLoading();
+    takeoutQr.value = data.qrUrl;
+    uni.showToast({ title: "外带码已生成", icon: "success" });
+    setTimeout(() => showImage(data.qrUrl), 600);
+  } catch (e: any) {
+    uni.hideLoading();
+    uni.showToast({ title: e.message || "生成失败", icon: "none" });
+  }
 }
 
 async function remove(t: Table) {
@@ -114,6 +142,19 @@ async function remove(t: Table) {
   display: flex;
   gap: 16rpx;
   align-items: center;
+}
+
+.takeout-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.takeout-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  margin-bottom: 4rpx;
 }
 
 .f-input {

@@ -22,7 +22,10 @@
 
     <view class="card" v-if="specGroups.length">
       <view v-for="group in specGroups" :key="group.name" class="spec-group">
-        <view class="spec-name">{{ group.name }}</view>
+        <view class="spec-name">
+          {{ group.name }}
+          <text v-if="group.multiple" class="multi-hint">可多选</text>
+        </view>
         <view class="spec-options">
           <view
             v-for="opt in group.options"
@@ -76,10 +79,11 @@ const cart = useCartStore();
 
 const specGroups = computed(() => {
   if (!product.value) return [];
-  return Object.entries(product.value.specsJson).map(([name, options]) => ({
-    name,
-    options,
-  }));
+  return Object.entries(product.value.specsJson).map(([name, def]) => {
+    const multiple = !Array.isArray(def) && (def as any)?.multiple === true;
+    const options = Array.isArray(def) ? def : ((def as any)?.options ?? []);
+    return { name, options, multiple };
+  });
 });
 
 const unitPrice = computed(() => {
@@ -108,12 +112,17 @@ function isSelected(groupName: string, label: string) {
   return (selections.value[groupName] ?? []).includes(label);
 }
 
-function toggleOption(group: { name: string; options: SpecOption[] }, opt: SpecOption) {
+function toggleOption(
+  group: { name: string; options: SpecOption[]; multiple: boolean },
+  opt: SpecOption
+) {
   const current = selections.value[group.name] ?? [];
-  // 单选组取第一个选项为默认，这里按单选处理：组内互斥
   if (current.includes(opt.label)) {
     selections.value[group.name] = current.filter((l) => l !== opt.label);
+  } else if (group.multiple) {
+    selections.value[group.name] = [...current, opt.label];
   } else {
+    // 单选组：组内互斥
     selections.value[group.name] = [opt.label];
   }
 }
@@ -124,9 +133,10 @@ function changeQty(delta: number) {
 
 function addToCart() {
   if (!product.value) return;
-  const specs: Record<string, string> = {};
-  for (const [name, sel] of Object.entries(selections.value)) {
-    if (sel.length) specs[name] = sel[0];
+  const specs: Record<string, string | string[]> = {};
+  for (const group of specGroups.value) {
+    const sel = selections.value[group.name] ?? [];
+    if (sel.length) specs[group.name] = group.multiple ? sel : sel[0];
   }
   cart.add({
     productId: product.value.id,
@@ -224,6 +234,13 @@ function goBack() {
   font-size: 28rpx;
   font-weight: 600;
   margin-bottom: 12rpx;
+}
+
+.multi-hint {
+  font-size: 20rpx;
+  font-weight: 400;
+  color: #c4a484;
+  margin-left: 8rpx;
 }
 
 .spec-options {

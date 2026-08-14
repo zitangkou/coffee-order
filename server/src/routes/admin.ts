@@ -1,5 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import multer from "multer";
 import path from "node:path";
 import fs from "node:fs";
 import QRCode from "qrcode";
@@ -18,6 +19,24 @@ import {
 } from "../services/stats.js";
 
 const router = Router();
+
+// 商品图片上传：存储到 uploads/products，限制 5MB、仅图片
+const uploadDir = path.resolve(process.cwd(), "uploads/products");
+fs.mkdirSync(uploadDir, { recursive: true });
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadDir),
+    filename: (_req, file, cb) => {
+      const safe = file.originalname.replace(/[^\w.\-]/g, "_");
+      cb(null, `${Date.now()}-${safe}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) cb(null, true);
+    else cb(new Error("只支持上传图片文件"));
+  },
+});
 
 router.post("/login", async (req, res) => {
   const username = str(req.body?.username).trim();
@@ -295,6 +314,45 @@ router.put("/settings", requireAdmin, async (req, res) => {
 router.post("/printer/test", requireAdmin, async (_req, res) => {
   console.log("[printer] 测试打印请求已接收");
   ok(res, { sent: true }, "测试打印已发送");
+});
+
+router.post("/products/:id/image", requireAdmin, upload.single("file"), async (req, res) => {
+  if (!req.file) return fail(res, "请选择要上传的图片");
+  const imageUrl = `/uploads/products/${req.file.filename}`;
+  const product = await prisma.product.update({
+    where: { id: num(req.params.id) },
+    data: { imageUrl },
+  });
+  ok(res, serializeProduct(product), "图片已上传");
+});
+
+router.put("/password", requireAdmin, async (req, res) => {
+  const { oldPassword, newPassword } = req.body ?? {};
+  if (!str(oldPassword) || !str(newPassword)) {
+    return fail(res, "请填写旧密码与新密码");
+  }
+  if (str(newPassword).length < 6) {
+    return fail(res, "新密码至少 6 位");
+  }
+  const admin = await prisma.admin.findUnique({ where: { id: (req as any).admin.id } });
+  if (!admin || !bcrypt.compareSync(str(oldPassword), admin.passwordHash)) {
+    return fail(res, "旧密码不正确");
+  }
+  const updated = await prisma.admin.update({
+    where: { id: admin.id },
+    data: { passwordHash: bcrypt.hashSync(str(newPassword), 10) },
+  });
+  ok(res, { username: updated.username }, "密码已修改");
+});
+
+router.post("/takeout-qrcode", requireAdmin, async (_req, res) => {
+  const webBase = process.env.WEB_BASE_URL || "http://localhost";
+  const url = `${webBase}/#/pages/index/index`;
+  const dir = path.resolve(process.cwd(), "uploads/qr");
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, "takeout.png");
+  await QRCode.toFile(file, url, { width: 600, margin: 1 });
+  ok(res, { qrUrl: "/uploads/qr/takeout.png", url }, "外带码已生成");
 });
 
 export default router;
