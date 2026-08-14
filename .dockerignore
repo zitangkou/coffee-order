@@ -1,0 +1,14 @@
+node_modules
+dist
+server/node_modules
+server/dist
+server/dev.db
+server/uploads
+server/.env
+web/node_modules
+web/dist
+.git
+.DS_Store
+md
+md_副本
+docs

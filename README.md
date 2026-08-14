@@ -68,7 +68,31 @@ npm run build:mp-weixin # 微信小程序产物 dist/build/mp-weixin
 
 小程序产物用微信开发者工具导入 `web/dist/build/mp-weixin` 即可预览。
 
-## 生产部署（MySQL）
+## 生产部署（Docker 一键方案，推荐）
+
+腾讯云 4核4G 完全够用。仓库根目录已提供完整 Docker 化部署（MySQL + 后端 + 前端 Nginx 三个容器）。
+
+**服务器上执行：**
+
+```bash
+git clone <你的仓库地址> coffee_order && cd coffee_order
+cp deploy/.env.example .env      # 按需修改密码、WEB_BASE_URL、端口等
+./deploy.sh                      # 构建并启动全部服务
+```
+
+完成后访问：
+
+- 顾客端：`http://<服务器IP>:80/#/pages/index/index`
+- 商家后台：`http://<服务器IP>:80/#/pages_admin/login/index`（`admin / admin123`）
+
+**说明**
+
+- 部署脚本自动建表、写入种子数据、做健康检查，失败会直接报错。
+- 腾讯云服务器若拉镜像慢，在 `.env` 里加 `DOCKER_MIRROR=mirror.ccs.tencentyun.com` 再执行 `./deploy.sh`。
+- 桌码地址由 `WEB_BASE_URL` 控制，部署后先在商家后台「桌台管理」重新生成桌码再打印。
+- 常用运维：`docker compose logs -f server`、`docker compose restart`、`git pull && docker compose up -d --build`。
+
+### 备选：传统部署（不使用 Docker）
 
 1. 将 `server/prisma/schema.mysql.prisma` 覆盖为 `schema.prisma`，`DATABASE_URL` 改为 MySQL 连接串。
 2. 启动 MySQL：`cd server && docker compose up -d mysql`（或使用已有 MySQL）。
