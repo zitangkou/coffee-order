@@ -9,7 +9,11 @@ export interface RequestOptions {
 
 export function request<T>(options: RequestOptions): Promise<T> {
   return new Promise((resolve, reject) => {
-    const header: Record<string, string> = { "Content-Type": "application/json" };
+    const header: Record<string, string> = {};
+    // 仅在有请求体时设置 Content-Type；部分手机网络会拦截带 JSON 头的 GET 请求
+    if (options.data !== undefined && options.method !== "GET") {
+      header["Content-Type"] = "application/json";
+    }
     const token = uni.getStorageSync(
       options.admin ? STORAGE_KEYS.adminToken : STORAGE_KEYS.userToken
     );
