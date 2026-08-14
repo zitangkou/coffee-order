@@ -1,13 +1,21 @@
-import {
-  type OrderStatus,
-  type OrderType,
-  type Prisma,
-} from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { genOrderNo, genPickupNo } from "../lib/ids.js";
 import { stringifyJson } from "../lib/json.js";
 import { prisma } from "../lib/prisma.js";
 import { calcUnitPrice, type SpecValue } from "./price.js";
 import { printOrder } from "./printer.js";
+
+export type OrderStatus =
+  | "UNPAID"
+  | "PAID"
+  | "MAKING"
+  | "READY"
+  | "COMPLETED"
+  | "REFUNDING"
+  | "REFUNDED"
+  | "CANCELLED";
+
+export type OrderType = "DINE_IN" | "TAKEOUT";
 
 export interface CreateOrderInput {
   userId?: number;
