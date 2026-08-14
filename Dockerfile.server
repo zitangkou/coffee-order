@@ -15,7 +15,9 @@ ENV PORT=3000
 
 # 先装依赖（利用构建缓存）
 COPY server/package.json server/package-lock.json ./
-RUN npm install --no-audit --no-fund
+# NODE_ENV=production 下 npm 默认跳过 devDependencies，
+# 而 tsx/prisma CLI 都在 devDependencies 中，必须显式包含
+RUN npm install --no-audit --no-fund --include=dev
 
 # 使用生产 MySQL schema 并生成 Prisma Client
 COPY server/prisma ./prisma
