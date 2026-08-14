@@ -29,7 +29,12 @@ export function request<T>(options: RequestOptions): Promise<T> {
           reject(new Error(body?.msg || "请求失败"));
         }
       },
-      fail: (err) => reject(new Error(err.errMsg || "网络异常")),
+      fail: (err) => {
+        const detail = (err as any)?.errMsg || (err as any)?.message || "网络异常";
+        const full = API_BASE + options.url;
+        console.error("[request fail]", options.method, full, err);
+        reject(new Error(`${detail} @ ${full}`));
+      },
     });
   });
 }

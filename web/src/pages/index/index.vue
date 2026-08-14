@@ -92,9 +92,13 @@ const currentProducts = computed(() => {
 });
 
 onLoad(async (options) => {
-  await user.ensureLogin();
-  await applyTableId((options as any)?.table_id);
-  loadData();
+  try {
+    await user.ensureLogin();
+    await applyTableId((options as any)?.table_id);
+    loadData();
+  } catch (e: any) {
+    uni.showToast({ title: `启动失败：${e.message || "未知错误"}`, icon: "none", duration: 5000 });
+  }
 });
 
 onShow(() => {
