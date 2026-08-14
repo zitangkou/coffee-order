@@ -1,5 +1,5 @@
 {
-  "name": "coffee-os-server",
+  "name": "coffee-order-server",
   "version": "0.1.0",
   "private": true,
   "type": "module",

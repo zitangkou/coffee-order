@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: "coffee-os-server",
+      name: "coffee-order-server",
       script: "node --import tsx src/index.ts",
       cwd: __dirname,
       instances: 1,

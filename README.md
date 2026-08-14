@@ -14,7 +14,7 @@
 ## 目录结构
 
 ```
-coffee_order/
+coffee-order/
 ├── server/                # 后端 API
 │   ├── prisma/            # schema.prisma（SQLite）/ schema.mysql.prisma（生产）
 │   ├── src/
@@ -77,7 +77,7 @@ npm run build:mp-weixin # 微信小程序产物 dist/build/mp-weixin
 **服务器上执行：**
 
 ```bash
-git clone <你的仓库地址> coffee_order && cd coffee_order
+git clone git@github.com:zitangkou/coffee-order.git && cd coffee-order
 cp deploy/.env.example .env      # 按需修改密码、WEB_BASE_URL、端口等
 ./deploy.sh                      # 构建并启动全部服务
 ```
