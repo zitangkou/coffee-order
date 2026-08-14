@@ -30,16 +30,15 @@ if ! docker compose version >/dev/null 2>&1; then
   }
 fi
 
-echo "[2/6] 配置 Docker 镜像加速（腾讯云）"
+echo "[2/6] 配置 Docker 镜像加速（多源，含腾讯云内网加速）"
+MIRRORS='["https://mirror.ccs.tencentyun.com", "https://mirror.baidubce.com", "https://docker.1panel.live", "https://docker.m.daocloud.io"]'
 if [ -n "$DOCKER_MIRROR" ]; then
-  MIRROR_URL="https://$DOCKER_MIRROR"
-else
-  MIRROR_URL="https://mirror.ccs.tencentyun.com"
+  MIRRORS="[\"https://$DOCKER_MIRROR\"]"
 fi
 $SUDO mkdir -p /etc/docker
 cat <<EOF | $SUDO tee /etc/docker/daemon.json >/dev/null
 {
-  "registry-mirrors": ["$MIRROR_URL"]
+  "registry-mirrors": $MIRRORS
 }
 EOF
 $SUDO systemctl restart docker || $SUDO service docker restart || true
