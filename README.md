@@ -74,6 +74,8 @@ npm run build:mp-weixin # 微信小程序产物 dist/build/mp-weixin
 
 完整图文步骤见 **[docs/部署指南.md](docs/部署指南.md)**（Ubuntu 22.04 + 安装 Docker + 部署 + HTTPS + 安全 + 运维）。
 
+项目进度、关键决策与后续待办见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**。
+
 **服务器上执行：**
 
 ```bash
