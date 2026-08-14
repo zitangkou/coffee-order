@@ -1,0 +1,94 @@
+import { prisma } from "../lib/prisma.js";
+
+const PAID_STATUSES = ["PAID", "MAKING", "READY", "COMPLETED"];
+
+function dayRange(date = new Date()) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+function rangeFor(unit: "today" | "week" | "month") {
+  const { start, end } = dayRange();
+  if (unit === "today") return { start, end };
+  if (unit === "week") {
+    const day = (start.getDay() + 6) % 7; // Monday first
+    start.setDate(start.getDate() - day);
+  }
+  if (unit === "month") {
+    start.setDate(1);
+  }
+  return { start, end };
+}
+
+export async function paidOrdersBetween(start: Date, end: Date) {
+  return prisma.order.findMany({
+    where: { status: { in: PAID_STATUSES }, paidAt: { gte: start, lte: end } },
+    include: { items: true },
+  });
+}
+
+export async function todayStats() {
+  const { start, end } = dayRange();
+  const orders = await paidOrdersBetween(start, end);
+  const revenue = Math.round(orders.reduce((s, o) => s + Number(o.totalAmount), 0) * 100) / 100;
+  return {
+    revenue,
+    orderCount: orders.length,
+    avgTicket: orders.length ? Math.round((revenue / orders.length) * 100) / 100 : 0,
+    pending: await prisma.order.count({ where: { status: "PAID" } }),
+    making: await prisma.order.count({ where: { status: "MAKING" } }),
+    ready: await prisma.order.count({ where: { status: "READY" } }),
+  };
+}
+
+export async function summary(unit: "today" | "week" | "month") {
+  const { start, end } = rangeFor(unit);
+  const orders = await paidOrdersBetween(start, end);
+  const revenue = Math.round(orders.reduce((s, o) => s + Number(o.totalAmount), 0) * 100) / 100;
+  return {
+    range: unit,
+    revenue,
+    orderCount: orders.length,
+    avgTicket: orders.length ? Math.round((revenue / orders.length) * 100) / 100 : 0,
+  };
+}
+
+export async function productRanking(unit: "today" | "week" | "month" = "today") {
+  const { start, end } = rangeFor(unit);
+  const orders = await paidOrdersBetween(start, end);
+  const map = new Map<number, { name: string; qty: number; amount: number }>();
+  for (const order of orders) {
+    for (const item of order.items) {
+      const cur = map.get(item.productId) ?? {
+        name: item.productName,
+        qty: 0,
+        amount: 0,
+      };
+      cur.qty += item.quantity;
+      cur.amount += Number(item.subtotal);
+      map.set(item.productId, cur);
+    }
+  }
+  return [...map.entries()]
+    .map(([productId, v]) => ({
+      productId,
+      name: v.name,
+      qty: v.qty,
+      amount: Math.round(v.amount * 100) / 100,
+    }))
+    .sort((a, b) => b.qty - a.qty)
+    .slice(0, 10);
+}
+
+export async function hourlyDistribution(date = new Date()) {
+  const { start, end } = dayRange(date);
+  const orders = await paidOrdersBetween(start, end);
+  const buckets = new Array(24).fill(0) as number[];
+  for (const o of orders) {
+    buckets[o.createdAt.getHours()] += 1;
+  }
+  return buckets.map((count, hour) => ({ hour: `${String(hour).padStart(2, "0")}:00`, count }));
+}

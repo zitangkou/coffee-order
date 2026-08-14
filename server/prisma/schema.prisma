@@ -1,0 +1,189 @@
+// 本地开发使用 SQLite（零依赖、开箱即跑）。
+// 生产环境切换到 MySQL：将 prisma/schema.mysql.prisma 覆盖本文件，
+// 并把 DATABASE_URL 改为 mysql:// 连接串后执行 prisma db push。
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id           Int     @id @default(autoincrement())
+  username     String  @unique
+  passwordHash String
+  role         String  @default("STAFF")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  refunds      Refund[]
+}
+
+model ShopSetting {
+  id                  Int      @id @default(1)
+  name                String   @default("Coffee OS")
+  slogan              String?
+  logoUrl             String?
+  announcement        String?
+  businessHours       String?
+  acceptOrders        Boolean  @default(true)
+  dineInEnabled       Boolean  @default(true)
+  takeoutEnabled      Boolean  @default(true)
+  packFee             Float    @default(0)
+  refundEnabled       Boolean  @default(true)
+  takeoutPhoneRequired Boolean @default(false)
+  printerConfig       String?
+  updatedAt           DateTime @updatedAt
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String
+  sortOrder Int       @default(0)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  products  Product[]
+}
+
+model Product {
+  id          Int        @id @default(autoincrement())
+  categoryId  Int
+  category    Category   @relation(fields: [categoryId], references: [id])
+  name        String
+  nameEn      String?
+  description String?
+  flavorNotes String?
+  origin      String?
+  roastLevel  String?
+  imageUrl    String?
+  price       Float
+  specsJson   String
+  isSoldOut   Boolean    @default(false)
+  isActive    Boolean    @default(true)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  orderItems  OrderItem[]
+
+  @@index([categoryId, isActive])
+}
+
+model TableInfo {
+  id        Int       @id @default(autoincrement())
+  tableNo   String    @unique
+  qrCodeUrl String?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  orders    Order[]
+}
+
+model User {
+  id              Int              @id @default(autoincrement())
+  openid          String?          @unique
+  phone           String?
+  nickname        String?
+  avatar          String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  orders          Order[]
+  memberAccount   MemberAccount?
+  walletLogs      WalletLog[]
+  rechargeRecords RechargeRecord[]
+}
+
+model Order {
+  id          Int         @id @default(autoincrement())
+  orderNo     String      @unique
+  pickupNo    String
+  userId      Int?
+  user        User?       @relation(fields: [userId], references: [id])
+  tableId     Int?
+  table       TableInfo?  @relation(fields: [tableId], references: [id])
+  orderType   String      @default("DINE_IN")
+  status      String      @default("UNPAID")
+  totalAmount Float
+  packFee     Float       @default(0)
+  remark      String?
+  phone       String?
+  payType     String      @default("WECHAT")
+  paidAt      DateTime?
+  refundedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  items       OrderItem[]
+  payments    Payment[]
+  refunds     Refund[]
+
+  @@index([status, createdAt])
+}
+
+model OrderItem {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  order       Order    @relation(fields: [orderId], references: [id])
+  productId   Int
+  product     Product  @relation(fields: [productId], references: [id])
+  productName String
+  specsDetail String
+  unitPrice   Float
+  quantity    Int      @default(1)
+  subtotal    Float
+
+  @@index([orderId])
+}
+
+model Payment {
+  id            Int      @id @default(autoincrement())
+  orderId       Int
+  order         Order    @relation(fields: [orderId], references: [id])
+  transactionId String?
+  amount        Float
+  status        String   @default("SUCCESS")
+  channel       String   @default("MOCK")
+  createdAt     DateTime @default(now())
+}
+
+model Refund {
+  id           Int      @id @default(autoincrement())
+  orderId      Int
+  order        Order    @relation(fields: [orderId], references: [id])
+  reason       String
+  status       String   @default("PENDING")
+  statusBefore String   @default("PAID")
+  handledBy    Int?
+  admin        Admin?   @relation(fields: [handledBy], references: [id])
+  rejectReason String?
+  createdAt    DateTime @default(now())
+  handledAt    DateTime?
+
+  @@index([status])
+}
+
+model MemberAccount {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  user      User     @relation(fields: [userId], references: [id])
+  balance   Float    @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model WalletLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  amount    Float
+  createdAt DateTime @default(now())
+}
+
+model RechargeRecord {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+  payAmount  Float
+  giveAmount Float    @default(0)
+  status     String   @default("SUCCESS")
+  createdAt  DateTime @default(now())
+}
