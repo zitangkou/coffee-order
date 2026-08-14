@@ -72,6 +72,8 @@ npm run build:mp-weixin # 微信小程序产物 dist/build/mp-weixin
 
 腾讯云 4核4G 完全够用。仓库根目录已提供完整 Docker 化部署（MySQL + 后端 + 前端 Nginx 三个容器）。
 
+完整图文步骤见 **[docs/部署指南.md](docs/部署指南.md)**（Ubuntu 22.04 + 安装 Docker + 部署 + HTTPS + 安全 + 运维）。
+
 **服务器上执行：**
 
 ```bash
