@@ -1,12 +1,15 @@
-// 后端 API 地址：H5 开发默认本地；生产环境通过 VITE_API_BASE 注入
-// 注意：uni-app H5 的 request 在部分手机浏览器（iOS Safari/微信 X5）不支持相对路径，
-// 因此 H5 平台把相对路径补全为绝对地址，避免手机端 request:fail
+// 后端 API 地址：H5 开发默认本地；生产环境通过 VITE_API_BASE 注入。
+// 注意：
+// 1. 必须用 import.meta.env 静态写法，Vite 构建时才会替换变量；
+//    不能用 (import.meta as any)?.env?.xxx 动态访问，否则退化为 localhost 兜底，
+//    导致手机端请求打到手机自己（request:fail）。
+// 2. uni-app H5 的 request 在部分手机浏览器不支持相对路径，故 H5 平台补全为绝对地址。
 export const API_BASE: string = (() => {
-  const base: string =
-    (import.meta as any)?.env?.VITE_API_BASE || "http://localhost:3000/api";
+  const base: string = import.meta.env.VITE_API_BASE || "/api";
   // #ifdef H5
-  if (base.startsWith("/")) {
-    return window.location.origin + base;
+  // 兜底：任何情况都不允许请求打到 localhost（手机上等于请求手机自己）
+  if (base.startsWith("/") || base.includes("localhost") || base.includes("127.0.0.1")) {
+    return window.location.origin + "/api";
   }
   // #endif
   return base;
