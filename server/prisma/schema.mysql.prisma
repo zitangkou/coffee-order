@@ -50,9 +50,24 @@ model Admin {
   username     String     @unique @db.VarChar(50)
   passwordHash String     @db.VarChar(255)
   role         AdminRole  @default(STAFF)
+  status       String     @default("ACTIVE") @db.VarChar(20)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   refunds      Refund[]
+  auditLogs    AuditLog[]
+}
+
+model AuditLog {
+  id         Int       @id @default(autoincrement())
+  adminId    Int?
+  admin      Admin?    @relation(fields: [adminId], references: [id])
+  action     String    @db.VarChar(50)
+  targetType String?   @db.VarChar(50)
+  targetId   Int?
+  detail     String?   @db.Text
+  createdAt  DateTime  @default(now())
+
+  @@index([createdAt])
 }
 
 model ShopSetting {

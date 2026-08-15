@@ -20,3 +20,11 @@ export function optionalUser(req: Request, _res: Response, next: NextFunction) {
   }
   next();
 }
+
+export function requireManager(req: Request, res: Response, next: NextFunction) {
+  const admin = (req as any).admin as AdminPayload | undefined;
+  if (!admin || admin.role !== "MANAGER") {
+    return fail(res, "无权限：仅店长可执行该操作", 403, 403);
+  }
+  next();
+}

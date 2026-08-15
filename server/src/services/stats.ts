@@ -92,3 +92,58 @@ export async function hourlyDistribution(date = new Date()) {
   }
   return buckets.map((count, hour) => ({ hour: `${String(hour).padStart(2, "0")}:00`, count }));
 }
+
+export async function trend(days: number) {
+  const result: { date: string; revenue: number; orderCount: number }[] = [];
+  const today = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const { start, end } = dayRange(d);
+    const orders = await paidOrdersBetween(start, end);
+    result.push({
+      date: `${d.getMonth() + 1}/${d.getDate()}`,
+      revenue: Math.round(orders.reduce((s, o) => s + Number(o.totalAmount), 0) * 100) / 100,
+      orderCount: orders.length,
+    });
+  }
+  return result;
+}
+
+export async function categoryShare(unit: "today" | "week" | "month" = "today") {
+  const { start, end } = rangeFor(unit);
+  const orders = await prisma.order.findMany({
+    where: { status: { in: PAID_STATUSES }, paidAt: { gte: start, lte: end } },
+    include: { items: { include: { product: { include: { category: true } } } } },
+  });
+  const map = new Map<string, { revenue: number; qty: number }>();
+  for (const order of orders) {
+    for (const item of order.items) {
+      const cat = item.product?.category?.name ?? "未分类";
+      const cur = map.get(cat) ?? { revenue: 0, qty: 0 };
+      cur.revenue += Number(item.subtotal);
+      cur.qty += item.quantity;
+      map.set(cat, cur);
+    }
+  }
+  return [...map.entries()]
+    .map(([name, v]) => ({
+      name,
+      revenue: Math.round(v.revenue * 100) / 100,
+      qty: v.qty,
+    }))
+    .sort((a, b) => b.revenue - a.revenue);
+}
+
+export async function refundStats(unit: "today" | "week" | "month" = "today") {
+  const { start, end } = rangeFor(unit);
+  const refunds = await prisma.refund.findMany({
+    where: { status: "APPROVED", handledAt: { gte: start, lte: end } },
+    include: { order: true },
+  });
+  const amount = refunds.reduce((s, r) => s + Number(r.order?.totalAmount ?? 0), 0);
+  return {
+    count: refunds.length,
+    amount: Math.round(amount * 100) / 100,
+  };
+}

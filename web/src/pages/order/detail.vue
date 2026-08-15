@@ -3,20 +3,11 @@
     <view v-if="order" class="card status-card">
       <view class="pickup-code">{{ order.pickupNo }}</view>
       <view class="pickup-label">取餐码</view>
-      <view class="steps">
-        <view
-          v-for="(s, idx) in steps"
-          :key="s.key"
-          class="step"
-          :class="currentStep >= idx ? 'step-done' : ''"
-        >
-          <view class="step-dot">{{ currentStep >= idx ? "✓" : "" }}</view>
-          <text class="step-label">{{ s.label }}</text>
-        </view>
-      </view>
-      <view class="status-badge">
+      <StepBar v-if="isNormalStatus" :status="order.status" />
+      <view v-else class="refund-card">
         <text class="badge" :class="statusClass(order.status)">{{ statusText(order.status) }}</text>
       </view>
+      <view class="status-line">{{ statusHint }}</view>
     </view>
 
     <view v-if="order" class="card">
@@ -78,6 +69,7 @@ import { computed, ref } from "vue";
 import { onLoad, onUnload } from "@dcloudio/uni-app";
 import { api } from "../../api";
 import { ORDER_STATUS_TEXT, type Order, type OrderStatus } from "../../types";
+import StepBar from "../../components/StepBar.vue";
 
 const order = ref<Order | null>(null);
 const showRefund = ref(false);
@@ -86,19 +78,24 @@ const reasons = ["不想要了", "点错了", "等待太久", "品质问题", "�
 let timer: any = null;
 let prevStatus = "";
 
-const steps = [
-  { key: "PAID", label: "已支付" },
-  { key: "MAKING", label: "制作中" },
-  { key: "READY", label: "待取餐" },
-  { key: "COMPLETED", label: "已完成" },
-];
+const normalStatuses = ["PAID", "MAKING", "READY", "COMPLETED"];
 
-const currentStep = computed(() => {
-  if (!order.value) return -1;
-  const idx = steps.findIndex((s) => s.key === order.value?.status);
-  if (idx >= 0) return idx;
-  if (["REFUNDING", "REFUNDED"].includes(order.value.status)) return 0;
-  return -1;
+const isNormalStatus = computed(() => {
+  return normalStatuses.includes(order.value?.status || "");
+});
+
+const statusHint = computed(() => {
+  const map: Record<string, string> = {
+    UNPAID: "订单待支付",
+    PAID: "已支付，等待咖啡师接单",
+    MAKING: "正在制作，预计 10 分钟",
+    READY: "咖啡已好，请到吧台取餐",
+    COMPLETED: "订单已完成，感谢光临",
+    REFUNDING: "退款申请审核中，请稍候",
+    REFUNDED: "订单已退款",
+    CANCELLED: "订单已取消",
+  };
+  return map[order.value?.status || ""] || "";
 });
 
 const canRefund = computed(() => {
@@ -197,40 +194,16 @@ async function submitRefund() {
   margin-bottom: 32rpx;
 }
 
-.steps {
-  display: flex;
-  justify-content: space-between;
-  margin: 24rpx 0;
-}
-
-.step {
-  flex: 1;
-  text-align: center;
-}
-
-.step-dot {
-  width: 44rpx;
-  height: 44rpx;
-  border-radius: 50%;
-  border: 2px solid #e0d8cd;
-  margin: 0 auto 8rpx;
-  line-height: 40rpx;
-  font-size: 24rpx;
-  color: #fff;
-}
-
-.step-done .step-dot {
-  background: #3e7c59;
-  border-color: #3e7c59;
-}
-
-.step-label {
-  font-size: 20rpx;
+.status-line {
+  margin-top: 20rpx;
+  font-size: 26rpx;
   color: #6b625b;
 }
 
-.status-badge {
-  margin-top: 16rpx;
+.refund-card {
+  display: flex;
+  justify-content: center;
+  margin-top: 32rpx;
 }
 
 .o-row {

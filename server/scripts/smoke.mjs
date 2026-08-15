@@ -99,6 +99,16 @@ async function main() {
       body: { status: "MAKING" },
     });
     if (o.status !== "MAKING") throw new Error(`状态=${o.status}`);
+    // 原子流转：重复接单应失败
+    const dup = await fetch(`${BASE}/admin/orders/${globalThis.orderId}/status`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${globalThis.adminToken}`,
+      },
+      body: JSON.stringify({ status: "MAKING" }),
+    });
+    if ((await dup.json()).code === 0) throw new Error("重复接单不应成功");
     o = await call(`/admin/orders/${globalThis.orderId}/status`, {
       method: "PATCH",
       token: globalThis.adminToken,
@@ -204,6 +214,56 @@ async function main() {
       token: globalThis.adminToken,
     });
     if (!data.qrUrl) throw new Error("未返回 qrUrl");
+  });
+
+  await check("统计扩展（趋势/品类/退款）", async () => {
+    const t = await call("/admin/stats/trend?days=7", { token: globalThis.adminToken });
+    if (!Array.isArray(t) || t.length !== 7) throw new Error("趋势数据异常");
+    const c = await call("/admin/stats/categories?range=today", { token: globalThis.adminToken });
+    if (!Array.isArray(c)) throw new Error("品类占比异常");
+    const rf = await call("/admin/stats/refunds?range=today", { token: globalThis.adminToken });
+    if (typeof rf.count !== "number" || typeof rf.amount !== "number") {
+      throw new Error("退款统计异常");
+    }
+  });
+
+  await check("管理员创建与权限隔离", async () => {
+    const uname = `staff_${Date.now()}`;
+    const created = await call("/admin/admins", {
+      method: "POST",
+      token: globalThis.adminToken,
+      body: { username: uname, password: "staff123", role: "STAFF" },
+    });
+    if (created.role !== "STAFF") throw new Error("角色错误");
+    const staffLogin = await call("/admin/login", {
+      method: "POST",
+      body: { username: uname, password: "staff123" },
+    });
+    const forbidden = await fetch(`${BASE}/admin/products`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${staffLogin.token}`,
+      },
+      body: JSON.stringify({ name: "越权测试", categoryId: 1, price: 1 }),
+    });
+    if ((await forbidden.json()).code === 0) throw new Error("店员不应能新增商品");
+    await call(`/admin/admins/${created.id}`, {
+      method: "PUT",
+      token: globalThis.adminToken,
+      body: { status: "DISABLED" },
+    });
+    const disabledLogin = await fetch(`${BASE}/admin/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: uname, password: "staff123" }),
+    });
+    if ((await disabledLogin.json()).code === 0) throw new Error("禁用账号不应能登录");
+  });
+
+  await check("审计日志", async () => {
+    const logs = await call("/admin/audit-logs", { token: globalThis.adminToken });
+    if (!Array.isArray(logs) || !logs.length) throw new Error("无审计记录");
   });
 
   await check("修改密码（改后还原）", async () => {

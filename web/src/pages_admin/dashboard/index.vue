@@ -34,6 +34,7 @@ const entries = [
   { icon: "🪑", name: "桌台管理", url: "/pages_admin/tables/index" },
   { icon: "📊", name: "数据统计", url: "/pages_admin/stats/index" },
   { icon: "⚙️", name: "系统设置", url: "/pages_admin/settings/index" },
+  { icon: "👥", name: "管理员", url: "/pages_admin/admins/index" },
 ];
 
 onShow(async () => {

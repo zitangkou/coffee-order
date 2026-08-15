@@ -156,11 +156,15 @@ export async function transitionOrder(orderId: number, status: OrderStatus) {
   if (!allowed.includes(status)) {
     throw new Error(`订单状态不允许从 ${order.status} 变更为 ${status}`);
   }
-  return prisma.order.update({
-    where: { id: orderId },
+  // 原子条件更新：两个店员同时接单/出餐时只有一个成功
+  const updated = await prisma.order.updateMany({
+    where: { id: orderId, status: order.status },
     data: { status },
-    include: orderInclude,
   });
+  if (updated.count === 0) {
+    throw new Error("订单状态已被其他操作更新，请刷新后重试");
+  }
+  return prisma.order.findUnique({ where: { id: orderId }, include: orderInclude });
 }
 
 export async function requestRefund(
@@ -209,24 +213,25 @@ export async function handleRefund(
   if (action === "REJECTED" && !rejectReason) {
     throw new Error("拒绝退款需填写原因");
   }
-  await prisma.$transaction([
-    prisma.refund.update({
-      where: { id: refundId },
-      data: {
-        status: action,
-        handledBy: adminId,
-        handledAt: new Date(),
-        rejectReason: rejectReason || null,
-      },
-    }),
-    prisma.order.update({
-      where: { id: refund.orderId },
-      data:
-        action === "APPROVED"
-          ? { status: "REFUNDED", refundedAt: new Date() }
-          : { status: refund.statusBefore },
-    }),
-  ]);
+  const updated = await prisma.refund.updateMany({
+    where: { id: refundId, status: "PENDING" },
+    data: {
+      status: action,
+      handledBy: adminId,
+      handledAt: new Date(),
+      rejectReason: rejectReason || null,
+    },
+  });
+  if (updated.count === 0) {
+    throw new Error("退款申请已被其他操作处理，请刷新后重试");
+  }
+  await prisma.order.update({
+    where: { id: refund.orderId },
+    data:
+      action === "APPROVED"
+        ? { status: "REFUNDED", refundedAt: new Date() }
+        : { status: refund.statusBefore },
+  });
   return prisma.refund.findUnique({ where: { id: refundId }, include: { order: true } });
 }
 

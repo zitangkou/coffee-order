@@ -39,6 +39,12 @@ export const api = {
   adminStatsProducts: (range: string) =>
     request<any[]>({ url: `/admin/stats/products?range=${range}`, admin: true }),
   adminStatsHours: () => request<any[]>({ url: "/admin/stats/hours", admin: true }),
+  adminStatsTrend: (days = 7) =>
+    request<any[]>({ url: `/admin/stats/trend?days=${days}`, admin: true }),
+  adminStatsCategories: (range: string) =>
+    request<any[]>({ url: `/admin/stats/categories?range=${range}`, admin: true }),
+  adminStatsRefunds: (range: string) =>
+    request<any>({ url: `/admin/stats/refunds?range=${range}`, admin: true }),
   adminOrders: (status = "", page = 1) =>
     request<{ list: Order[]; total: number }>({
       url: `/admin/orders?status=${status}&page=${page}`,
@@ -111,4 +117,12 @@ export const api = {
       method: "POST",
       admin: true,
     }),
+  adminAdmins: () =>
+    request<any[]>({ url: "/admin/admins", admin: true }),
+  adminCreateAdmin: (username: string, password: string, role: string) =>
+    request<any>({ url: "/admin/admins", method: "POST", data: { username, password, role }, admin: true }),
+  adminUpdateAdmin: (id: number, data: { role?: string; status?: string; password?: string }) =>
+    request<any>({ url: `/admin/admins/${id}`, method: "PUT", data, admin: true }),
+  adminAuditLogs: () =>
+    request<any[]>({ url: "/admin/audit-logs?limit=50", admin: true }),
 };
