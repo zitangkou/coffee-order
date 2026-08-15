@@ -14,7 +14,7 @@ export interface UserPayload {
 }
 
 export function signAdmin(payload: { id: number; role: string }) {
-  return jwt.sign({ ...payload, type: "admin" }, SECRET, { expiresIn: "7d" });
+  return jwt.sign({ ...payload, type: "admin" }, SECRET, { expiresIn: "2d" });
 }
 
 export function signUser(id: number) {

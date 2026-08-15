@@ -4,7 +4,7 @@
       <view class="sheet-title">新增管理员</view>
       <view class="f-label">用户名</view>
       <input v-model="newUsername" class="f-input" placeholder="登录名" />
-      <view class="f-label">初始密码（至少 6 位）</view>
+      <view class="f-label">初始密码（至少 8 位）</view>
       <input v-model="newPassword" class="f-input" password placeholder="初始密码" />
       <view class="f-label">角色</view>
       <picker :range="['店员 STAFF', '店长 MANAGER']" @change="(e:any)=>newRole=['STAFF','MANAGER'][Number(e.detail.value)]">
@@ -72,7 +72,7 @@ async function load() {
 
 async function create() {
   if (!newUsername.value.trim() || newPassword.value.length < 6) {
-    uni.showToast({ title: "用户名必填，密码至少 6 位", icon: "none" });
+    uni.showToast({ title: "用户名必填，密码至少 8 位", icon: "none" });
     return;
   }
   try {
@@ -122,12 +122,12 @@ async function resetPassword(a: any) {
     uni.showModal({
       title: `重置 ${a.username} 的密码`,
       editable: true,
-      placeholderText: "输入新密码（至少 6 位）",
+      placeholderText: "输入新密码（至少 8 位）",
       success: (m) => resolve(m.confirm ? m.content || "" : ""),
     });
   });
   if (!res || res.length < 6) {
-    uni.showToast({ title: "密码至少 6 位", icon: "none" });
+    uni.showToast({ title: "密码至少 8 位", icon: "none" });
     return;
   }
   try {

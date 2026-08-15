@@ -33,6 +33,10 @@
       "style": { "navigationBarTitleText": "商家登录" }
     },
     {
+      "path": "pages_admin/change-password/index",
+      "style": { "navigationBarTitleText": "修改密码" }
+    },
+    {
       "path": "pages_admin/dashboard/index",
       "style": { "navigationBarTitleText": "经营看板" }
     },

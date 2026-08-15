@@ -29,7 +29,11 @@ async function login() {
     uni.setStorageSync(STORAGE_KEYS.adminToken, data.token);
     uni.setStorageSync(STORAGE_KEYS.adminInfo, data.admin);
     uni.hideLoading();
-    uni.redirectTo({ url: "/pages_admin/dashboard/index" });
+    if (data.admin.mustChangePassword) {
+      uni.redirectTo({ url: "/pages_admin/change-password/index?first=1" });
+    } else {
+      uni.redirectTo({ url: "/pages_admin/dashboard/index" });
+    }
   } catch (e: any) {
     uni.hideLoading();
     uni.showToast({ title: e.message || "登录失败", icon: "none" });

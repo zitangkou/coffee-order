@@ -10,6 +10,7 @@ import { fail, ok } from "../lib/response.js";
 import { signAdmin } from "../lib/jwt.js";
 import { parseJson, serializeOrder, serializeProduct, stringifyJson } from "../lib/json.js";
 import { requireAdmin, requireManager } from "../middleware/auth.js";
+import { loginLimiter } from "../middleware/rateLimit.js";
 import { logAudit } from "../lib/audit.js";
 import { handleRefund, transitionOrder } from "../services/order.js";
 import {
@@ -55,14 +56,23 @@ const upload = multer({
   },
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter(), async (req, res) => {
   const username = str(req.body?.username).trim();
   const password = str(req.body?.password);
   const admin = await prisma.admin.findUnique({ where: { username } });
   if (!admin || admin.status === "DISABLED" || !bcrypt.compareSync(password, admin.passwordHash)) {
     return fail(res, "用户名或密码错误", 401, 401);
   }
-  ok(res, { token: signAdmin({ id: admin.id, role: admin.role }), admin: { id: admin.id, username: admin.username, role: admin.role } });
+  ok(res, {
+    token: signAdmin({ id: admin.id, role: admin.role }),
+    admin: {
+      id: admin.id,
+      username: admin.username,
+      role: admin.role,
+      status: admin.status,
+      mustChangePassword: admin.mustChangePassword,
+    },
+  });
 });
 
 router.get("/admins", requireAdmin, requireManager, async (_req, res) => {
@@ -77,11 +87,11 @@ router.post("/admins", requireAdmin, requireManager, async (req, res) => {
   const username = str(req.body?.username).trim();
   const password = str(req.body?.password);
   const role = str(req.body?.role) === "MANAGER" ? "MANAGER" : "STAFF";
-  if (!username || password.length < 6) return fail(res, "用户名必填且密码至少 6 位");
+  if (!username || password.length < 8) return fail(res, "用户名必填且密码至少 8 位");
   const exists = await prisma.admin.findUnique({ where: { username } });
   if (exists) return fail(res, "用户名已存在");
   const admin = await prisma.admin.create({
-    data: { username, passwordHash: bcrypt.hashSync(password, 10), role },
+    data: { username, passwordHash: bcrypt.hashSync(password, 10), role, mustChangePassword: true },
   });
   await logAudit((req as any).admin.id, "ADMIN_CREATE", "Admin", admin.id, `${username}(${role})`);
   ok(res, { id: admin.id, username: admin.username, role: admin.role, status: admin.status }, "管理员已创建");
@@ -99,8 +109,9 @@ router.put("/admins/:id", requireAdmin, requireManager, async (req, res) => {
     data.status = body.status === "DISABLED" ? "DISABLED" : "ACTIVE";
   }
   if (str(body.password)) {
-    if (str(body.password).length < 6) return fail(res, "密码至少 6 位");
+    if (str(body.password).length < 8) return fail(res, "密码至少 8 位");
     data.passwordHash = bcrypt.hashSync(str(body.password), 10);
+    data.mustChangePassword = true;
   }
   const admin = await prisma.admin.update({ where: { id }, data });
   await logAudit((req as any).admin.id, "ADMIN_UPDATE", "Admin", id, JSON.stringify(data));
@@ -555,8 +566,8 @@ router.put("/password", requireAdmin, async (req, res) => {
   if (!str(oldPassword) || !str(newPassword)) {
     return fail(res, "请填写旧密码与新密码");
   }
-  if (str(newPassword).length < 6) {
-    return fail(res, "新密码至少 6 位");
+  if (str(newPassword).length < 8) {
+    return fail(res, "新密码至少 8 位");
   }
   const admin = await prisma.admin.findUnique({ where: { id: (req as any).admin.id } });
   if (!admin || !bcrypt.compareSync(str(oldPassword), admin.passwordHash)) {
@@ -564,9 +575,9 @@ router.put("/password", requireAdmin, async (req, res) => {
   }
   const updated = await prisma.admin.update({
     where: { id: admin.id },
-    data: { passwordHash: bcrypt.hashSync(str(newPassword), 10) },
+    data: { passwordHash: bcrypt.hashSync(str(newPassword), 10), mustChangePassword: false },
   });
-  ok(res, { username: updated.username }, "密码已修改");
+  ok(res, { username: updated.username, mustChangePassword: false }, "密码已修改");
 });
 
 router.post("/takeout-qrcode", requireAdmin, async (_req, res) => {

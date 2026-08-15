@@ -37,6 +37,11 @@ services:
       WEB_BASE_URL: ${WEB_BASE_URL:-http://localhost}
       MOCK_PAYMENT: ${MOCK_PAYMENT:-true}
       PRINTER_ENABLED: ${PRINTER_ENABLED:-false}
+      RATE_LIMIT_DISABLED: ${RATE_LIMIT_DISABLED:-false}
+      API_RATE_LIMIT: ${API_RATE_LIMIT:-300}
+      LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-5}
+      WECHAT_API_V3_KEY: ${WECHAT_API_V3_KEY:-}
+      WECHAT_PLATFORM_CERT_PATH: ${WECHAT_PLATFORM_CERT_PATH:-}
     volumes:
       - uploads:/app/uploads
     healthcheck:

@@ -28,7 +28,10 @@ export const api = {
 
   // 商家端
   adminLogin: (username: string, password: string) =>
-    request<{ token: string; admin: { id: number; username: string; role: string } }>({
+    request<{
+      token: string;
+      admin: { id: number; username: string; role: string; status: string; mustChangePassword: boolean };
+    }>({
       url: "/admin/login",
       method: "POST",
       data: { username, password },

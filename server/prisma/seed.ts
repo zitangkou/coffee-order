@@ -112,11 +112,18 @@ async function ensureSpecGroups() {
 
 async function main() {
   const passwordHash = bcrypt.hashSync("admin123", 10);
-  await prisma.admin.upsert({
+  const admin = await prisma.admin.upsert({
     where: { username: "admin" },
     update: {},
-    create: { username: "admin", passwordHash, role: "MANAGER" },
+    create: { username: "admin", passwordHash, role: "MANAGER", mustChangePassword: true },
   });
+  // 默认密码仍在使用时，强制下一次登录修改
+  if (admin && bcrypt.compareSync("admin123", admin.passwordHash)) {
+    await prisma.admin.update({
+      where: { id: admin.id },
+      data: { mustChangePassword: true },
+    });
+  }
 
   await prisma.shopSetting.upsert({
     where: { id: 1 },

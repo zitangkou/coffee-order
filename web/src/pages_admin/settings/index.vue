@@ -43,7 +43,7 @@
       <view class="section-title">修改密码</view>
       <view class="f-label">旧密码</view>
       <input v-model="oldPassword" class="f-input" password placeholder="当前密码" />
-      <view class="f-label">新密码（至少 6 位）</view>
+      <view class="f-label">新密码（至少 8 位）</view>
       <input v-model="newPassword" class="f-input" password placeholder="新密码" />
       <view class="f-label">确认新密码</view>
       <input v-model="confirmPassword" class="f-input" password placeholder="再次输入新密码" />
@@ -109,7 +109,7 @@ async function changePassword() {
     return;
   }
   if (newPassword.value.length < 6) {
-    uni.showToast({ title: "新密码至少 6 位", icon: "none" });
+    uni.showToast({ title: "新密码至少 8 位", icon: "none" });
     return;
   }
   if (newPassword.value !== confirmPassword.value) {

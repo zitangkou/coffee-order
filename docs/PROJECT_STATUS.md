@@ -186,3 +186,19 @@
 - 订单步骤条：`components/StepBar.vue` 四步流程（已支付→制作中→待取餐→已完成），退款/取消用独立状态卡。
 - 统计扩展：近 7 天营收趋势、品类销售占比、退款统计，数据可导出 CSV（Excel 可打开）。
 - 冒烟测试扩展至 18 项（原子流转、管理员权限隔离、审计日志、统计扩展），全部通过；双端构建通过。
+
+## 11. 迭代 C 安全 P0 完成记录 · 2026-08-15
+
+- 接口限流：`express-rate-limit`，全局默认 300 次/分钟/IP；登录接口 5 次/15 分钟/IP（防暴力破解），阈值与开关可配（`RATE_LIMIT_DISABLED / API_RATE_LIMIT / LOGIN_RATE_LIMIT`）。
+- 支付回调：`services/payment.ts` 实现微信支付 v3 回调验签（RSA-SHA256）+ AES-256-GCM 解密 + 金额二次校验 + 交易号幂等；**fail-closed**——未配置商户证书/密钥时回调一律拒绝；冒烟测试已覆盖。
+- 密码策略：管理员密码最少 8 位；新建管理员强制首登改密；默认密码 `admin123` 被检测到时强制开启改密（`Admin.mustChangePassword`）；修改密码后清除标记。
+- 登录态：管理员 JWT 有效期由 7 天收紧为 2 天。
+- Nginx：安全响应头（X-Content-Type-Options / X-Frame-Options / Referrer-Policy / CSP）。
+- 数据库备份：`deploy/backup.sh`（mysqldump + gzip + 保留 14 天）+ `deploy/install-backup.sh`（crontab 每日 03:00）。
+- 冒烟测试扩展至 19 项，全部通过；双端构建通过。
+
+**仍依赖外部条件的项（代码/配置已就绪，待激活）**：
+
+- 全站 HTTPS：待域名 + ICP 备案（证书与 Nginx 网关配置见部署文档）。
+- 微信支付正式接入：待商户号 + APIv3 密钥 + 平台证书（配置 `WECHAT_API_V3_KEY` / `WECHAT_PLATFORM_CERT_PATH` 后自动启用验签回调）。
+- MySQL 端口：容器默认不暴露公网（compose 仅内网 expose），已满足。

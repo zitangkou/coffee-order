@@ -266,6 +266,16 @@ async function main() {
     if (!Array.isArray(logs) || !logs.length) throw new Error("无审计记录");
   });
 
+  await check("支付回调 fail-closed（未配置商户时拒绝）", async () => {
+    const res = await fetch(`${BASE}/payment/callback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dummy: true }),
+    });
+    const json = await res.json();
+    if (json.code !== "FAIL") throw new Error("未配置微信支付时回调必须被拒绝");
+  });
+
   await check("修改密码（改后还原）", async () => {
     await call("/admin/password", {
       method: "PUT",

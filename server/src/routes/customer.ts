@@ -6,6 +6,7 @@ import { signUser } from "../lib/jwt.js";
 import { serializeOrder, serializeProduct } from "../lib/json.js";
 import { optionalUser } from "../middleware/auth.js";
 import { createOrder, mockPay, requestRefund, wechatPay } from "../services/order.js";
+import { handlePaymentCallback } from "../services/payment.js";
 
 const router = Router();
 
@@ -120,6 +121,19 @@ router.post("/orders/:id/pay", optionalUser, async (req, res) => {
     ok(res, serializeOrder(order), "支付成功");
   } catch (e: any) {
     fail(res, e?.message || "支付失败");
+  }
+});
+
+// 微信支付结果回调（公网可访问，验签 fail-closed）
+router.post("/payment/callback", async (req, res) => {
+  try {
+    const rawBody: Buffer =
+      (req as any).rawBody || Buffer.from(JSON.stringify(req.body ?? {}), "utf8");
+    const result = await handlePaymentCallback(rawBody, req.headers as Record<string, string>);
+    res.json(result);
+  } catch (e: any) {
+    console.error("[payment] callback error:", e?.message);
+    res.status(400).json({ code: "FAIL", message: e?.message || "回调处理失败" });
   }
 });
 

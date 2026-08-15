@@ -16,6 +16,7 @@ model Admin {
   passwordHash String
   role         String  @default("STAFF")
   status       String  @default("ACTIVE")
+  mustChangePassword Boolean @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   refunds      Refund[]

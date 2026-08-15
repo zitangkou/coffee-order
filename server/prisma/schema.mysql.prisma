@@ -51,6 +51,7 @@ model Admin {
   passwordHash String     @db.VarChar(255)
   role         AdminRole  @default(STAFF)
   status       String     @default("ACTIVE") @db.VarChar(20)
+  mustChangePassword Boolean @default(false)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   refunds      Refund[]
