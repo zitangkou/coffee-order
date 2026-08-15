@@ -1,52 +1,22 @@
 #!/usr/bin/env bash
-# Coffee OS 一键部署脚本（Ubuntu 22.04 云服务器，root 或 sudo 用户执行）
+# Coffee Order 部署脚本（只构建/启动本项目，不做全局环境配置）
+# 首次使用前先执行一次 deploy/setup-docker.sh
 set -e
 cd "$(dirname "$0")"
 
-SUDO=""
-if [ "$(id -u)" -ne 0 ]; then
-  SUDO="sudo"
+if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
+  echo "未检测到 Docker / Docker Compose，请先执行：bash deploy/setup-docker.sh"
+  exit 1
 fi
 
 echo "=========================================="
-echo " Coffee OS 一键部署"
+echo " Coffee OS 部署（方案B：内网端口 + 网关转发）"
 echo "=========================================="
 
-echo "[1/6] 检查/安装 Docker 与 Docker Compose"
-if ! command -v docker >/dev/null 2>&1; then
-  echo "  未检测到 Docker，开始安装（官方脚本，失败则回退 apt）..."
-  curl -fsSL https://get.docker.com | sh || $SUDO apt-get install -y docker.io
-  $SUDO systemctl enable --now docker || true
-fi
-
-if ! docker compose version >/dev/null 2>&1; then
-  echo "  未检测到 Docker Compose v2，尝试安装..."
-  $SUDO apt-get install -y docker-compose-plugin 2>/dev/null || {
-    $SUDO mkdir -p /usr/local/lib/docker/cli-plugins
-    $SUDO curl -SL \
-      https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
-      -o /usr/local/lib/docker/cli-plugins/docker-compose
-    $SUDO chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
-  }
-fi
-
-echo "[2/6] 配置 Docker 镜像加速（多源，含腾讯云内网加速）"
-MIRRORS='["https://mirror.ccs.tencentyun.com", "https://mirror.baidubce.com", "https://docker.1panel.live", "https://docker.m.daocloud.io"]'
-if [ -n "$DOCKER_MIRROR" ]; then
-  MIRRORS="[\"https://$DOCKER_MIRROR\"]"
-fi
-$SUDO mkdir -p /etc/docker
-cat <<EOF | $SUDO tee /etc/docker/daemon.json >/dev/null
-{
-  "registry-mirrors": $MIRRORS
-}
-EOF
-$SUDO systemctl restart docker || $SUDO service docker restart || true
-
-echo "[3/6] 构建并启动容器（MySQL + 后端 + 前端）"
+echo "[1/3] 构建并启动容器（MySQL + 后端 + 前端）"
 docker compose up -d --build
 
-echo "[4/6] 等待服务健康检查通过..."
+echo "[2/3] 等待服务健康检查通过..."
 for i in $(seq 1 40); do
   if docker inspect --format '{{.State.Health.Status}}' coffee-web 2>/dev/null | grep -q healthy; then
     break
@@ -54,19 +24,18 @@ for i in $(seq 1 40); do
   sleep 2
 done
 
-echo "[5/6] 验证 API"
-PORT="${HTTP_PORT:-80}"
-curl -fsS "http://localhost:${PORT}/api/health" && echo
+echo "[3/3] 验证 API（本机内网）"
+PORT="${HTTP_PORT:-8080}"
+curl -fsS "http://127.0.0.1:${PORT}/api/health" && echo
 
-echo "[6/6] 完成"
 echo ""
 echo "部署完成！"
-echo "  顾客端首页:  http://<服务器IP或域名>:${PORT}/#/pages/index/index"
-echo "  商家后台:    http://<服务器IP或域名>:${PORT}/#/pages_admin/login/index"
-echo "  默认账号:    admin / admin123（上线前请修改）"
+echo "  本机内网入口: http://127.0.0.1:${PORT}"
+echo "  对外访问:     由宿主机 Nginx 网关按域名转发（见 docs/多项目部署指南.md）"
+echo "  商家后台:     http://<域名>/#/pages_admin/login/index  admin / admin123"
 echo ""
 echo "常用命令："
-echo "  查看日志:   docker compose logs -f server"
-echo "  重启:       docker compose restart"
-echo "  更新:       git pull && docker compose up -d --build"
-echo "  停止:       docker compose down"
+echo "  查看日志: docker compose logs -f server"
+echo "  重启:     docker compose restart"
+echo "  更新:     git pull && docker compose up -d --build"
+echo "  停止:     docker compose down"
