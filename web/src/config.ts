@@ -22,3 +22,6 @@ export const STORAGE_KEYS = {
   adminToken: "admin_token",
   adminInfo: "admin_info",
 };
+
+// 微信订阅消息：出餐通知模板 ID（提审前替换为真实模板 ID；未配置时跳过订阅引导）
+export const WX_SUBSCRIBE_TEMPLATE_READY = "your_template_id";

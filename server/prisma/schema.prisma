@@ -138,6 +138,7 @@ model TableInfo {
 model User {
   id              Int              @id @default(autoincrement())
   openid          String?          @unique
+  wxOpenid        String?          @unique
   phone           String?
   phoneVerified   Boolean          @default(false)
   nickname        String?
@@ -148,6 +149,18 @@ model User {
   memberAccount   MemberAccount?
   walletLogs      WalletLog[]
   rechargeRecords RechargeRecord[]
+  subscribes      UserSubscribe[]
+}
+
+model UserSubscribe {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+  templateId String
+  status     String   @default("ACCEPTED")
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, templateId])
 }
 
 model SmsCode {

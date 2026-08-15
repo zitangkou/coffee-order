@@ -13,6 +13,12 @@ export const api = {
       method: "POST",
       data: { deviceId },
     }),
+  wxLogin: (code: string) =>
+    request<{ userId: number; token: string; user: any }>({
+      url: "/auth/wx-login",
+      method: "POST",
+      data: { code },
+    }),
   sendSmsCode: (phone: string) =>
     request<{ devCode?: string }>({
       url: "/auth/send-code",
@@ -30,6 +36,10 @@ export const api = {
     phone?: string;
   }) => request<Order>({ url: "/orders", method: "POST", data }),
   mockPay: (id: number) => request<Order>({ url: `/orders/${id}/mock-pay`, method: "POST" }),
+  payOrder: (id: number) =>
+    request<any>({ url: `/orders/${id}/pay`, method: "POST" }),
+  saveSubscribe: (templateId: string) =>
+    request<any>({ url: "/user/subscribe", method: "POST", data: { templateId } }),
   myOrders: () => request<Order[]>({ url: "/orders/my" }),
   getOrder: (id: number) => request<Order>({ url: `/orders/${id}` }),
   requestRefund: (id: number, reason: string) =>

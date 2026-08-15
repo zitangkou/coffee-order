@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { STORAGE_KEYS } from "../config";
 import { api } from "../api";
 import type { Table } from "../types";
+import { wxLoginCode } from "../utils/platform";
 
 export const useUserStore = defineStore("user", {
   state: () => ({
@@ -14,6 +15,20 @@ export const useUserStore = defineStore("user", {
   actions: {
     async ensureLogin() {
       if (this.token) return;
+      try {
+        // 小程序端优先使用微信登录（未配置时后端明确报错，回退游客）
+        // #ifdef MP-WEIXIN
+        const code = await wxLoginCode();
+        const wxData = await api.wxLogin(code);
+        this.userId = wxData.userId;
+        this.token = wxData.token;
+        uni.setStorageSync(STORAGE_KEYS.userId, wxData.userId);
+        uni.setStorageSync(STORAGE_KEYS.userToken, wxData.token);
+        return;
+        // #endif
+      } catch (e) {
+        console.warn("[user] 微信登录失败，回退游客登录", e);
+      }
       try {
         let deviceId = uni.getStorageSync(STORAGE_KEYS.deviceId) as string;
         if (!deviceId) {

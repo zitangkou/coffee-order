@@ -4,6 +4,7 @@ import { stringifyJson } from "../lib/json.js";
 import { prisma } from "../lib/prisma.js";
 import { calcUnitPrice, type SpecValue } from "./price.js";
 import { printOrder } from "./printer.js";
+import { sendOrderReadyNotify } from "./wechat.js";
 
 export type OrderStatus =
   | "UNPAID"
@@ -164,7 +165,14 @@ export async function transitionOrder(orderId: number, status: OrderStatus) {
   if (updated.count === 0) {
     throw new Error("订单状态已被其他操作更新，请刷新后重试");
   }
-  return prisma.order.findUnique({ where: { id: orderId }, include: orderInclude });
+  const result = await prisma.order.findUnique({ where: { id: orderId }, include: orderInclude });
+  // 出餐时给已订阅的微信用户推送取餐通知（best-effort）
+  if (status === "READY" && result) {
+    sendOrderReadyNotify(result).catch((e) =>
+      console.warn("[wx] 订阅消息发送失败:", e?.message)
+    );
+  }
+  return result;
 }
 
 export async function requestRefund(

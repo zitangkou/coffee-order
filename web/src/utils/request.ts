@@ -1,4 +1,5 @@
 import { API_BASE, STORAGE_KEYS } from "../config";
+import { IS_MP_WEIXIN } from "./platform";
 
 export interface RequestOptions {
   url: string;
@@ -18,6 +19,7 @@ export function request<T>(options: RequestOptions): Promise<T> {
       options.admin ? STORAGE_KEYS.adminToken : STORAGE_KEYS.userToken
     );
     if (token) header.Authorization = `Bearer ${token}`;
+    if (IS_MP_WEIXIN) header["X-Platform"] = "mp-weixin";
 
     uni.request({
       url: API_BASE + options.url,

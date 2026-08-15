@@ -9,6 +9,7 @@ import { createOrder, mockPay, requestRefund, wechatPay } from "../services/orde
 import { handlePaymentCallback } from "../services/payment.js";
 import { memberProfile } from "../services/member.js";
 import { isConsoleSms, sendSmsCode } from "../services/sms.js";
+import { createJsapiPayment, jscode2session, wxMpConfigured, wxPayConfigured } from "../services/wechat.js";
 
 const router = Router();
 
@@ -90,6 +91,29 @@ router.post("/auth/guest", async (req, res) => {
   ok(res, { userId: user.id, token: signUser(user.id) });
 });
 
+// 微信小程序登录：code 换取 openid 并建立/绑定用户
+router.post("/auth/wx-login", async (req, res) => {
+  const code = str(req.body?.code, "").trim();
+  if (!code) return fail(res, "缺少微信登录 code");
+  if (!wxMpConfigured()) return fail(res, "微信小程序登录未配置（WECHAT_MP_APPID/SECRET）");
+  try {
+    const session = await jscode2session(code);
+    let user = await prisma.user.findUnique({ where: { wxOpenid: session.openid } });
+    if (!user) {
+      user = await prisma.user.create({
+        data: { wxOpenid: session.openid, nickname: "微信用户" },
+      });
+    }
+    ok(res, {
+      userId: user.id,
+      token: signUser(user.id),
+      user: { id: user.id, phone: user.phone, phoneVerified: user.phoneVerified },
+    });
+  } catch (e: any) {
+    fail(res, e?.message || "微信登录失败");
+  }
+});
+
 router.post("/auth/send-code", async (req, res) => {
   const phone = str(req.body?.phone, "").trim();
   if (!/^1[3-9]\d{9}$/.test(phone)) return fail(res, "手机号格式不正确");
@@ -131,6 +155,20 @@ router.post("/user/phone", optionalUser, async (req, res) => {
   ok(res, await memberProfile(userId), "绑定成功");
 });
 
+// 保存用户订阅消息授权（出餐通知模板）
+router.post("/user/subscribe", optionalUser, async (req, res) => {
+  const userId = (req as any).userId;
+  if (!userId) return fail(res, "请先登录");
+  const templateId = str(req.body?.templateId, "").trim();
+  if (!templateId) return fail(res, "缺少模板ID");
+  await prisma.userSubscribe.upsert({
+    where: { userId_templateId: { userId, templateId } },
+    update: { status: "ACCEPTED" },
+    create: { userId, templateId, status: "ACCEPTED" },
+  });
+  ok(res, null, "订阅已保存");
+});
+
 router.get("/user/profile", optionalUser, async (req, res) => {
   const userId = (req as any).userId;
   if (!userId) return fail(res, "请先登录");
@@ -166,6 +204,21 @@ router.post("/orders/:id/mock-pay", optionalUser, async (req, res) => {
 
 router.post("/orders/:id/pay", optionalUser, async (req, res) => {
   try {
+    const platform = str(req.headers["x-platform"] || "");
+    if (platform === "mp-weixin") {
+      // 小程序端：返回 wx.requestPayment 参数（未配置时 fail-closed）
+      const order = await prisma.order.findUnique({ where: { id: num(req.params.id) } });
+      if (!order) return fail(res, "订单不存在");
+      if (order.status !== "UNPAID") return fail(res, "订单状态不允许支付");
+      if (!wxPayConfigured()) return fail(res, "微信支付未配置（WECHAT_MCH_ID/SERIAL/私钥/APIv3密钥）");
+      const user = order.userId
+        ? await prisma.user.findUnique({ where: { id: order.userId } })
+        : null;
+      if (!user?.wxOpenid) return fail(res, "缺少微信 openid，请先微信登录");
+      const payParams = await createJsapiPayment(order, user.wxOpenid);
+      return ok(res, { payParams });
+    }
+    // H5 等非小程序端：暂用模拟支付
     const order = await wechatPay(num(req.params.id));
     ok(res, serializeOrder(order), "支付成功");
   } catch (e: any) {

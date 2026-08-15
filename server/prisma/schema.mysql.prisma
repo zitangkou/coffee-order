@@ -173,6 +173,7 @@ model TableInfo {
 model User {
   id              Int              @id @default(autoincrement())
   openid          String?          @unique @db.VarChar(64)
+  wxOpenid        String?          @unique @db.VarChar(64)
   phone           String?          @db.VarChar(20)
   phoneVerified   Boolean          @default(false)
   nickname        String?          @db.VarChar(50)
@@ -183,6 +184,18 @@ model User {
   memberAccount   MemberAccount?
   walletLogs      WalletLog[]
   rechargeRecords RechargeRecord[]
+  subscribes      UserSubscribe[]
+}
+
+model UserSubscribe {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+  templateId String   @db.VarChar(100)
+  status     String   @default("ACCEPTED") @db.VarChar(20)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, templateId])
 }
 
 model SmsCode {

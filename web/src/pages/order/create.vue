@@ -85,6 +85,9 @@ import { api } from "../../api";
 import { useCartStore } from "../../stores/cart";
 import { useUserStore } from "../../stores/user";
 import type { Table } from "../../types";
+// #ifdef MP-WEIXIN
+import { requestPayment } from "../../utils/platform";
+// #endif
 
 const user = useUserStore();
 const cart = useCartStore();
@@ -154,7 +157,28 @@ async function submit() {
       remark: cart.remark || undefined,
       phone: phone.value || undefined,
     });
-    const paid = await api.mockPay(order.id);
+    let paid = null as any;
+    // #ifdef MP-WEIXIN
+    try {
+      const payRes = await api.payOrder(order.id);
+      if (payRes.payParams) {
+        const okPay = await requestPayment(payRes.payParams);
+        if (!okPay) {
+          uni.hideLoading();
+          uni.showToast({ title: "支付已取消", icon: "none" });
+          uni.redirectTo({ url: "/pages/order/list" });
+          return;
+        }
+        paid = await api.getOrder(order.id);
+      }
+    } catch (e: any) {
+      uni.hideLoading();
+      uni.showToast({ title: e.message || "支付失败", icon: "none" });
+      uni.redirectTo({ url: "/pages/order/list" });
+      return;
+    }
+    // #endif
+    if (!paid) paid = await api.mockPay(order.id);
     cart.clear();
     uni.hideLoading();
     uni.redirectTo({ url: `/pages/order/result?id=${paid.id}` });

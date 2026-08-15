@@ -93,6 +93,48 @@ async function main() {
     if (order.status !== "PAID") throw new Error(`状态=${order.status}`);
   });
 
+  await check("微信支付参数（mp 未配置拒绝 / H5 模拟回退）", async () => {
+    const order = await call("/orders", {
+      method: "POST",
+      token: globalThis.userToken,
+      body: {
+        orderType: "TAKEOUT",
+        items: [{ productId: globalThis.firstProductId, quantity: 1, specs: {} }],
+      },
+    });
+    const mpRes = await fetch(`${BASE}/orders/${order.id}/pay`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Platform": "mp-weixin",
+        Authorization: `Bearer ${globalThis.userToken}`,
+      },
+      body: "{}",
+    });
+    const mpJson = await mpRes.json();
+    if (mpJson.code === 0) throw new Error("未配置微信支付时 mp 应拒绝");
+    const h5 = await call(`/orders/${order.id}/pay`, {
+      method: "POST",
+      token: globalThis.userToken,
+    });
+    if (h5.status !== "PAID") throw new Error("H5 模拟支付应成功");
+  });
+
+  await check("微信登录/订阅（未配置明确报错，订阅可保存）", async () => {
+    const wxRes = await fetch(`${BASE}/auth/wx-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: "smoke-test-code" }),
+    });
+    const wxJson = await wxRes.json();
+    if (wxJson.code === 0) throw new Error("未配置小程序时应拒绝微信登录");
+    await call("/user/subscribe", {
+      method: "POST",
+      token: globalThis.userToken,
+      body: { templateId: "SMOKE_TEMPLATE" },
+    });
+  });
+
   await check("商家登录", async () => {
     const data = await call("/admin/login", {
       method: "POST",

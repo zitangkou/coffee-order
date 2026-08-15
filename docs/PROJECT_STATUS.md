@@ -212,3 +212,14 @@
 - 冒烟测试扩展至 20 项（发码/绑定/档案），全部通过；双端构建通过。
 
 **明确暂缓**：储值（含 MemberAccount/WalletLog/RechargeRecord 表已建，待有稳定熟客与资金合规准备后再做）；AI 分析（待数据积累 3–6 个月后评估）。
+
+## 13. 微信小程序 Phase 6 代码骨架完成记录 · 2026-08-16
+
+- 微信登录：`POST /auth/wx-login`（code 换 openid，`User.wxOpenid` 唯一绑定）；前端小程序端优先微信登录，失败回退游客登录。
+- 微信支付：`POST /orders/:id/pay` 按 `X-Platform: mp-weixin` 区分——小程序端返回 `wx.requestPayment` 参数（JSAPI 下单 + RSA 签名，未配置资质 fail-closed），H5 端保持模拟支付；下单页接入收银台拉起与取消处理。
+- 订阅消息：`POST /user/subscribe` 保存授权；订单出餐（READY）时向已订阅微信用户推送取餐通知（best-effort）；支付成功页引导订阅（模板 ID 未配置时跳过）。
+- 平台适配：`utils/platform.ts` 条件编译封装 `wx.login / requestPayment / requestSubscribeMessage`，H5 端零影响。
+- 配置项：`WECHAT_MP_APPID / WECHAT_MP_SECRET / WECHAT_MCH_ID / WECHAT_MCH_SERIAL / WECHAT_MCH_PRIVATE_KEY_PATH / WECHAT_SUBSCRIBE_TEMPLATE_READY`（compose 与 .env.example 已就绪）。
+- 冒烟测试扩展至 22 项（mp 支付 fail-closed、H5 回退、微信登录未配置报错、订阅保存），全部通过；双端构建通过。
+
+**待资质就绪后**：填 AppID/Secret/商户号/证书/模板 ID → 微信开发者工具导入 `web/dist/build/mp-weixin` 真机调试 → 配置合法域名 → 提审发布。

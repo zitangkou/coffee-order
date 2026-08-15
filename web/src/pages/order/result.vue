@@ -19,6 +19,10 @@ import { ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import { api } from "../../api";
 import type { Order } from "../../types";
+// #ifdef MP-WEIXIN
+import { WX_SUBSCRIBE_TEMPLATE_READY } from "../../config";
+import { subscribeMessage } from "../../utils/platform";
+// #endif
 
 const order = ref<Order | null>(null);
 
@@ -26,10 +30,29 @@ onLoad(async (options) => {
   const id = Number((options as any)?.id);
   try {
     order.value = await api.getOrder(id);
+    // #ifdef MP-WEIXIN
+    requestSubscribe();
+    // #endif
   } catch (e: any) {
     uni.showToast({ title: e.message || "加载失败", icon: "none" });
   }
 });
+
+// #ifdef MP-WEIXIN
+async function requestSubscribe() {
+  try {
+    const tmpl = WX_SUBSCRIBE_TEMPLATE_READY;
+    if (!tmpl || tmpl.startsWith("your_")) return;
+    const accepted = await subscribeMessage(tmpl);
+    if (accepted) {
+      await api.saveSubscribe(tmpl);
+      uni.showToast({ title: "出餐通知已开启", icon: "none" });
+    }
+  } catch (e) {
+    console.warn("[wx] 订阅引导失败", e);
+  }
+}
+// #endif
 
 function goDetail() {
   uni.redirectTo({ url: `/pages/order/detail?id=${order.value?.id}` });
