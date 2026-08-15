@@ -13,6 +13,15 @@ export const api = {
       method: "POST",
       data: { deviceId },
     }),
+  sendSmsCode: (phone: string) =>
+    request<{ devCode?: string }>({
+      url: "/auth/send-code",
+      method: "POST",
+      data: { phone },
+    }),
+  bindPhone: (phone: string, code: string) =>
+    request<any>({ url: "/user/phone", method: "POST", data: { phone, code } }),
+  userProfile: () => request<any>({ url: "/user/profile" }),
   createOrder: (data: {
     tableId?: number;
     orderType: "DINE_IN" | "TAKEOUT";

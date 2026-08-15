@@ -63,6 +63,7 @@
       <view v-if="!currentProducts.length" class="empty">本分类暂无商品</view>
     </view>
 
+    <view class="member-entry" @tap="goMember">我的咖啡档案</view>
     <view class="admin-entry" @tap="goAdmin">商家后台</view>
 
     <view v-if="cart.count > 0" class="cart-bar">
@@ -262,6 +263,10 @@ function goCheckout() {
 function goAdmin() {
   uni.navigateTo({ url: "/pages_admin/login/index" });
 }
+
+function goMember() {
+  uni.navigateTo({ url: "/pages/member/index" });
+}
 </script>
 
 <style lang="scss" scoped>
@@ -448,6 +453,14 @@ function goAdmin() {
   font-size: 22rpx;
   margin: 32rpx 0 8rpx;
   text-decoration: underline;
+}
+
+.member-entry {
+  text-align: center;
+  color: #6b4f2f;
+  font-size: 24rpx;
+  font-weight: 600;
+  margin: 32rpx 0 0;
 }
 
 .cart-bar {

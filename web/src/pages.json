@@ -29,6 +29,10 @@
       "style": { "navigationBarTitleText": "订单详情" }
     },
     {
+      "path": "pages/member/index",
+      "style": { "navigationBarTitleText": "咖啡档案" }
+    },
+    {
       "path": "pages_admin/login/index",
       "style": { "navigationBarTitleText": "商家登录" }
     },

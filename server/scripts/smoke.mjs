@@ -55,6 +55,21 @@ async function main() {
     globalThis.userToken = data.token;
   });
 
+  await check("轻会员：发码/绑定/档案", async () => {
+    const phone = `138${String(Date.now()).slice(-8)}`;
+    const codeRes = await call("/auth/send-code", { method: "POST", body: { phone } });
+    if (!codeRes.devCode) throw new Error("开发模式应返回验证码");
+    const profile = await call("/user/phone", {
+      method: "POST",
+      token: globalThis.userToken,
+      body: { phone, code: codeRes.devCode },
+    });
+    if (!profile.user.phoneVerified) throw new Error("绑定后应 phoneVerified");
+    if (!profile.member.level?.current?.name) throw new Error("缺少会员等级");
+    const p2 = await call("/user/profile", { token: globalThis.userToken });
+    if (p2.user.phone !== phone) throw new Error("档案手机号不一致");
+  });
+
   await check("创建订单", async () => {
     const order = await call("/orders", {
       method: "POST",

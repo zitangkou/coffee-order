@@ -139,6 +139,7 @@ model User {
   id              Int              @id @default(autoincrement())
   openid          String?          @unique
   phone           String?
+  phoneVerified   Boolean          @default(false)
   nickname        String?
   avatar          String?
   createdAt       DateTime         @default(now())
@@ -147,6 +148,17 @@ model User {
   memberAccount   MemberAccount?
   walletLogs      WalletLog[]
   rechargeRecords RechargeRecord[]
+}
+
+model SmsCode {
+  id        Int      @id @default(autoincrement())
+  phone     String
+  code      String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([phone])
 }
 
 model Order {

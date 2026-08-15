@@ -7,6 +7,8 @@ import { serializeOrder, serializeProduct } from "../lib/json.js";
 import { optionalUser } from "../middleware/auth.js";
 import { createOrder, mockPay, requestRefund, wechatPay } from "../services/order.js";
 import { handlePaymentCallback } from "../services/payment.js";
+import { memberProfile } from "../services/member.js";
+import { isConsoleSms, sendSmsCode } from "../services/sms.js";
 
 const router = Router();
 
@@ -86,6 +88,53 @@ router.post("/auth/guest", async (req, res) => {
       data: { openid: `guest:${deviceId}`, nickname: "咖啡客人" },
     }));
   ok(res, { userId: user.id, token: signUser(user.id) });
+});
+
+router.post("/auth/send-code", async (req, res) => {
+  const phone = str(req.body?.phone, "").trim();
+  if (!/^1[3-9]\d{9}$/.test(phone)) return fail(res, "手机号格式不正确");
+  const last = await prisma.smsCode.findFirst({
+    where: { phone },
+    orderBy: { createdAt: "desc" },
+  });
+  if (last && Date.now() - last.createdAt.getTime() < 60_000) {
+    return fail(res, "发送过于频繁，请 1 分钟后再试");
+  }
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  await prisma.smsCode.create({
+    data: { phone, code, expiresAt: new Date(Date.now() + 5 * 60_000) },
+  });
+  await sendSmsCode(phone, code);
+  ok(res, { devCode: isConsoleSms() ? code : undefined }, "验证码已发送");
+});
+
+router.post("/user/phone", optionalUser, async (req, res) => {
+  const userId = (req as any).userId;
+  if (!userId) return fail(res, "请先登录");
+  const phone = str(req.body?.phone, "").trim();
+  const code = str(req.body?.code, "").trim();
+  if (!/^1[3-9]\d{9}$/.test(phone)) return fail(res, "手机号格式不正确");
+  if (!/^\d{6}$/.test(code)) return fail(res, "验证码格式不正确");
+  const record = await prisma.smsCode.findFirst({
+    where: { phone, code, usedAt: null },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!record || record.expiresAt < new Date()) {
+    return fail(res, "验证码无效或已过期");
+  }
+  const dup = await prisma.user.findFirst({ where: { phone, id: { not: userId } } });
+  if (dup) return fail(res, "该手机号已绑定其他账号");
+  await prisma.$transaction([
+    prisma.smsCode.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+    prisma.user.update({ where: { id: userId }, data: { phone, phoneVerified: true } }),
+  ]);
+  ok(res, await memberProfile(userId), "绑定成功");
+});
+
+router.get("/user/profile", optionalUser, async (req, res) => {
+  const userId = (req as any).userId;
+  if (!userId) return fail(res, "请先登录");
+  ok(res, await memberProfile(userId));
 });
 
 router.post("/orders", optionalUser, async (req, res) => {
