@@ -1,6 +1,18 @@
 export interface SpecOption {
+  id: number;
   label: string;
-  extra: number;
+  extraPrice: number;
+  isDefault: boolean;
+  sortOrder: number;
+}
+
+export interface SpecGroup {
+  id: number;
+  name: string;
+  type: "SINGLE" | "MULTI";
+  required: boolean;
+  sortOrder: number;
+  options: SpecOption[];
 }
 
 export interface Product {
@@ -14,7 +26,9 @@ export interface Product {
   roastLevel?: string;
   imageUrl?: string;
   price: number;
-  specsJson: Record<string, SpecOption[]>;
+  isSignature: boolean;
+  isHot: boolean;
+  specGroups: SpecGroup[];
   isSoldOut: boolean;
   isActive: boolean;
 }

@@ -65,7 +65,7 @@
 </template>
 
 <script setup lang="ts">
-import { onUnload } from "@dcloudio/uni-app";
+import { onLoad, onUnload } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import { api } from "../../api";
 import { ORDER_STATUS_TEXT, type Order, type OrderStatus } from "../../types";
@@ -81,6 +81,14 @@ const activeTab = ref("PAID");
 const orders = ref<Order[]>([]);
 const refunds = ref<any[]>([]);
 let timer: any = null;
+
+onLoad((options) => {
+  const tab = (options as any)?.tab;
+  if (tab && tabs.some((t) => t.value === tab)) {
+    activeTab.value = tab;
+    load();
+  }
+});
 
 async function load() {
   try {

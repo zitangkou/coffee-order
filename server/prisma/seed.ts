@@ -4,6 +4,112 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+interface SpecSeed {
+  name: string;
+  type: "SINGLE" | "MULTI";
+  options: { label: string; extra?: number; default?: boolean }[];
+}
+
+const specTemplates: SpecSeed[] = [
+  {
+    name: "杯型",
+    type: "SINGLE",
+    options: [
+      { label: "标准", extra: 0, default: true },
+      { label: "大杯", extra: 5 },
+    ],
+  },
+  {
+    name: "温度",
+    type: "SINGLE",
+    options: [
+      { label: "热", extra: 0, default: true },
+      { label: "冰", extra: 0 },
+    ],
+  },
+  {
+    name: "奶类",
+    type: "SINGLE",
+    options: [
+      { label: "全脂奶", extra: 0, default: true },
+      { label: "燕麦奶", extra: 3 },
+      { label: "厚奶", extra: 4 },
+    ],
+  },
+  {
+    name: "浓度",
+    type: "SINGLE",
+    options: [
+      { label: "标准", extra: 0, default: true },
+      { label: "加浓", extra: 3 },
+    ],
+  },
+  {
+    name: "加料",
+    type: "MULTI",
+    options: [
+      { label: "浓缩", extra: 5 },
+      { label: "香草糖浆", extra: 3 },
+    ],
+  },
+  {
+    name: "SOE豆种",
+    type: "SINGLE",
+    options: [
+      { label: "默认拼配", extra: 0, default: true },
+      { label: "埃塞俄比亚 SOE", extra: 4 },
+    ],
+  },
+  {
+    name: "烘焙度",
+    type: "SINGLE",
+    options: [{ label: "浅烘", extra: 0, default: true }],
+  },
+  {
+    name: "份量",
+    type: "SINGLE",
+    options: [
+      { label: "单份", extra: 0, default: true },
+      { label: "双份", extra: 15 },
+    ],
+  },
+  {
+    name: "甜度",
+    type: "SINGLE",
+    options: [
+      { label: "无糖", extra: 0 },
+      { label: "三分糖", extra: 0 },
+      { label: "标准糖", extra: 0, default: true },
+    ],
+  },
+];
+
+async function ensureSpecGroups() {
+  const map = new Map<string, number>();
+  for (const [idx, t] of specTemplates.entries()) {
+    let group = await prisma.specGroup.findUnique({ where: { name: t.name } });
+    if (!group) {
+      group = await prisma.specGroup.create({
+        data: {
+          name: t.name,
+          type: t.type,
+          sortOrder: idx,
+          options: {
+            create: t.options.map((o, oi) => ({
+              label: o.label,
+              extraPrice: o.extra ?? 0,
+              isDefault: o.default ?? false,
+              sortOrder: oi,
+            })),
+          },
+        },
+      });
+    }
+    map.set(t.name, group.id);
+  }
+  return map;
+}
+
 async function main() {
   const passwordHash = bcrypt.hashSync("admin123", 10);
   await prisma.admin.upsert({
@@ -36,13 +142,15 @@ async function main() {
   const categories: Record<string, number> = {};
   for (const c of catData) {
     const exists = await prisma.category.findFirst({ where: { name: c.name } });
-    if (!exists) {
+    if (exists) {
+      categories[c.name] = exists.id;
+    } else {
       const row = await prisma.category.create({ data: { name: c.name, sortOrder: c.sortOrder } });
       categories[c.name] = row.id;
-    } else {
-      categories[c.name] = exists.id;
     }
   }
+
+  const specGroupIds = await ensureSpecGroups();
 
   const products = [
     {
@@ -53,13 +161,9 @@ async function main() {
       description: "经典意式浓缩与丝滑牛奶的平衡之作。",
       flavorNotes: "坚果 / 黑巧 / 焦糖",
       roastLevel: "中深烘",
-      specsJson: {
-        杯型: [{ label: "标准", extra: 0 }, { label: "大杯", extra: 5 }],
-        温度: [{ label: "热", extra: 0 }, { label: "冰", extra: 0 }],
-        奶类: [{ label: "全脂奶", extra: 0 }, { label: "燕麦奶", extra: 3 }, { label: "厚奶", extra: 4 }],
-        浓度: [{ label: "标准", extra: 0 }, { label: "加浓", extra: 3 }],
-        加料: [{ label: "浓缩", extra: 5 }, { label: "香草糖浆", extra: 3 }],
-      },
+      isSignature: true,
+      isHot: true,
+      specs: ["杯型", "温度", "奶类", "浓度", "加料"],
     },
     {
       name: "冰美式",
@@ -69,10 +173,9 @@ async function main() {
       description: "清爽直接，适合夏日的纯粹咖啡。",
       flavorNotes: "柑橘 / 坚果",
       roastLevel: "中深烘",
-      specsJson: {
-        杯型: [{ label: "标准", extra: 0 }, { label: "大杯", extra: 5 }],
-        浓度: [{ label: "标准", extra: 0 }, { label: "加浓", extra: 3 }],
-      },
+      isSignature: false,
+      isHot: true,
+      specs: ["杯型", "浓度"],
     },
     {
       name: "燕麦拿铁",
@@ -83,11 +186,9 @@ async function main() {
       flavorNotes: "燕麦 / 榛果 / 红糖",
       origin: "埃塞俄比亚",
       roastLevel: "中烘",
-      specsJson: {
-        杯型: [{ label: "标准", extra: 0 }, { label: "大杯", extra: 5 }],
-        温度: [{ label: "热", extra: 0 }, { label: "冰", extra: 0 }],
-        SOE豆种: [{ label: "默认拼配", extra: 0 }, { label: "埃塞俄比亚 SOE", extra: 4 }],
-      },
+      isSignature: true,
+      isHot: false,
+      specs: ["杯型", "温度", "SOE豆种"],
     },
     {
       name: "手冲·埃塞俄比亚",
@@ -98,10 +199,9 @@ async function main() {
       flavorNotes: "茉莉花 / 柑橘 / 白桃",
       origin: "埃塞俄比亚 耶加雪菲",
       roastLevel: "浅烘",
-      specsJson: {
-        烘焙度: [{ label: "浅烘", extra: 0 }],
-        份量: [{ label: "单份", extra: 0 }, { label: "双份", extra: 15 }],
-      },
+      isSignature: true,
+      isHot: false,
+      specs: ["烘焙度", "份量"],
     },
     {
       name: "茉莉绿茶",
@@ -110,10 +210,9 @@ async function main() {
       price: 22,
       description: "清新茉莉，冷泡热饮皆宜。",
       flavorNotes: "茉莉 / 绿茶",
-      specsJson: {
-        温度: [{ label: "热", extra: 0 }, { label: "冰", extra: 0 }],
-        甜度: [{ label: "无糖", extra: 0 }, { label: "三分糖", extra: 0 }, { label: "标准糖", extra: 0 }],
-      },
+      isSignature: false,
+      isHot: false,
+      specs: ["温度", "甜度"],
     },
     {
       name: "巴斯克芝士蛋糕",
@@ -122,28 +221,37 @@ async function main() {
       price: 32,
       description: "外焦内软，浓郁芝士香。",
       flavorNotes: "芝士 / 焦糖",
-      specsJson: {},
+      isSignature: false,
+      isHot: false,
+      specs: [],
     },
   ];
 
   for (const p of products) {
     const exists = await prisma.product.findFirst({ where: { name: p.name } });
-    if (!exists) {
-      await prisma.product.create({
-        data: {
-          name: p.name,
-          nameEn: p.nameEn ?? null,
-          categoryId: categories[p.category],
-          price: p.price,
-          description: p.description ?? null,
-          flavorNotes: p.flavorNotes ?? null,
-          origin: p.origin ?? null,
-          roastLevel: p.roastLevel ?? null,
-          specsJson: JSON.stringify(p.specsJson),
-          sortOrder: 0,
+    if (exists) continue;
+    await prisma.product.create({
+      data: {
+        name: p.name,
+        nameEn: p.nameEn,
+        categoryId: categories[p.category],
+        price: p.price,
+        description: p.description,
+        flavorNotes: p.flavorNotes,
+        origin: p.origin,
+        roastLevel: p.roastLevel,
+        isSignature: p.isSignature,
+        isHot: p.isHot,
+        sortOrder: 0,
+        specGroups: {
+          create: p.specs.map((name, idx) => ({
+            specGroupId: specGroupIds.get(name)!,
+            required: true,
+            sortOrder: idx,
+          })),
         },
-      });
-    }
+      },
+    });
   }
 
   const tableNos = ["A01", "A02", "A03", "A04", "A05", "A06", "B01", "B02"];

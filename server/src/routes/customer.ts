@@ -19,6 +19,18 @@ router.get("/categories", async (_req, res) => {
       products: {
         where: { isActive: true },
         orderBy: { sortOrder: "asc" },
+        include: {
+          specGroups: {
+            orderBy: { sortOrder: "asc" },
+            include: {
+              specGroup: {
+                include: {
+                  options: { orderBy: { sortOrder: "asc" }, where: { isActive: true } },
+                },
+              },
+            },
+          },
+        },
       },
     },
   });
@@ -32,7 +44,19 @@ router.get("/products/:id", async (req, res) => {
   const id = num(req.params.id);
   const product = await prisma.product.findFirst({
     where: { id, isActive: true },
-    include: { category: true },
+    include: {
+      category: true,
+      specGroups: {
+        orderBy: { sortOrder: "asc" },
+        include: {
+          specGroup: {
+            include: {
+              options: { orderBy: { sortOrder: "asc" }, where: { isActive: true } },
+            },
+          },
+        },
+      },
+    },
   });
   if (!product) return fail(res, "商品不存在或已下架");
   ok(res, serializeProduct(product));

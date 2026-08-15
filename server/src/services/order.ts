@@ -37,6 +37,18 @@ export async function createOrder(input: CreateOrderInput) {
   const productIds = input.items.map((i) => i.productId);
   const products = await prisma.product.findMany({
     where: { id: { in: productIds }, isActive: true, isSoldOut: false },
+    include: {
+      specGroups: {
+        orderBy: { sortOrder: "asc" },
+        include: {
+          specGroup: {
+            include: {
+              options: { orderBy: { sortOrder: "asc" }, where: { isActive: true } },
+            },
+          },
+        },
+      },
+    },
   });
   if (products.length !== new Set(productIds).size) {
     throw new Error("存在已下架或售罄的商品");
@@ -49,7 +61,13 @@ export async function createOrder(input: CreateOrderInput) {
   const items = input.items.map((it) => {
     const product = productMap.get(it.productId);
     if (!product) throw new Error("商品不存在");
-    const unitPrice = calcUnitPrice(product, it.specs ?? {});
+    const specGroups = product.specGroups.map((psg: any) => ({
+      name: psg.specGroup.name,
+      type: psg.specGroup.type,
+      required: psg.required,
+      options: psg.specGroup.options,
+    }));
+    const unitPrice = calcUnitPrice({ price: Number(product.price), specGroups }, it.specs ?? {});
     const quantity = Math.max(1, Math.min(99, it.quantity || 1));
     return {
       productId: product.id,

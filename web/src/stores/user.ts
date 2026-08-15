@@ -7,9 +7,9 @@ export const useUserStore = defineStore("user", {
   state: () => ({
     userId: (uni.getStorageSync(STORAGE_KEYS.userId) as number) || null,
     token: (uni.getStorageSync(STORAGE_KEYS.userToken) as string) || "",
-    tableId: null as number | null,
-    tableNo: "" as string,
-    orderType: "DINE_IN" as "DINE_IN" | "TAKEOUT",
+    tableId: (uni.getStorageSync("order_table_id") as number) || null,
+    tableNo: (uni.getStorageSync("order_table_no") as string) || "",
+    orderType: (uni.getStorageSync("order_type") as "DINE_IN" | "TAKEOUT") || "DINE_IN",
   }),
   actions: {
     async ensureLogin() {
@@ -33,9 +33,12 @@ export const useUserStore = defineStore("user", {
     setTable(table: Table | null) {
       this.tableId = table?.id ?? null;
       this.tableNo = table?.tableNo ?? "";
+      uni.setStorageSync("order_table_id", this.tableId);
+      uni.setStorageSync("order_table_no", this.tableNo);
     },
     setOrderType(type: "DINE_IN" | "TAKEOUT") {
       this.orderType = type;
+      uni.setStorageSync("order_type", type);
     },
   },
 });

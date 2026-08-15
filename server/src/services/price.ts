@@ -1,24 +1,33 @@
-import type { Product } from "@prisma/client";
-import { parseJson } from "../lib/json.js";
-
 export type SpecValue = string | string[];
 
+export interface SpecOptionLite {
+  label: string;
+  extraPrice: number;
+}
+
+export interface SpecGroupLite {
+  name: string;
+  type: string;
+  required: boolean;
+  options: SpecOptionLite[];
+}
+
+/**
+ * 根据商品关联的规格组（DB 结构化数据）计算单价。
+ * specs 的 key 为规格组名，值为选项 label（多选为数组）。
+ */
 export function calcUnitPrice(
-  product: Product,
+  product: { price: number; specGroups: SpecGroupLite[] },
   specs: Record<string, SpecValue> = {}
 ): number {
   let total = Number(product.price);
-  const specDefs = parseJson<Record<
-    string,
-    { label: string; extra: number }[] | { options: { label: string; extra: number }[]; multiple?: boolean }
-  >>(product.specsJson, {});
-  for (const [key, value] of Object.entries(specs)) {
-    const raw = specDefs[key];
-    const defs = Array.isArray(raw) ? raw : raw?.options ?? [];
-    const selected = Array.isArray(value) ? value : [value];
-    for (const s of selected) {
-      const def = defs.find((d) => d.label === s);
-      if (def) total += Number(def.extra ?? 0);
+  for (const group of product.specGroups ?? []) {
+    const selected = specs[group.name];
+    if (selected == null) continue;
+    const values = Array.isArray(selected) ? selected : [selected];
+    for (const v of values) {
+      const opt = (group.options ?? []).find((o) => o.label === v);
+      if (opt) total += Number(opt.extraPrice || 0);
     }
   }
   return Math.round(total * 100) / 100;

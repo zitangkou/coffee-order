@@ -2,11 +2,11 @@
   <view class="page">
     <view class="card hero">
       <view class="today">今日营业额</view>
-      <view class="revenue">¥{{ stats.revenue || 0 }}</view>
+      <view class="revenue clickable" @tap="goOrders('PAID')">¥{{ stats.revenue || 0 }}</view>
       <view class="metrics">
-        <view class="metric"><text class="m-num">{{ stats.orderCount || 0 }}</text><text class="m-label">订单数</text></view>
-        <view class="metric"><text class="m-num">{{ stats.avgTicket || 0 }}</text><text class="m-label">客单价</text></view>
-        <view class="metric"><text class="m-num">{{ stats.pending || 0 }}</text><text class="m-label">待接单</text></view>
+        <view class="metric clickable" @tap="goOrders('PAID')"><text class="m-num">{{ stats.orderCount || 0 }}</text><text class="m-label">订单数</text></view>
+        <view class="metric clickable" @tap="goStats"><text class="m-num">{{ stats.avgTicket || 0 }}</text><text class="m-label">客单价</text></view>
+        <view class="metric clickable" @tap="goOrders('PAID')"><text class="m-num">{{ stats.pending || 0 }}</text><text class="m-label">待接单</text></view>
       </view>
     </view>
 
@@ -48,6 +48,14 @@ function go(url: string) {
   uni.navigateTo({ url });
 }
 
+function goOrders(tab: string) {
+  uni.navigateTo({ url: `/pages_admin/orders/index?tab=${tab}` });
+}
+
+function goStats() {
+  uni.navigateTo({ url: "/pages_admin/stats/index" });
+}
+
 function logout() {
   uni.removeStorageSync(STORAGE_KEYS.adminToken);
   uni.reLaunch({ url: "/pages_admin/login/index" });
@@ -80,6 +88,10 @@ function logout() {
 
 .metric {
   text-align: center;
+}
+
+.clickable {
+  cursor: pointer;
 }
 
 .m-num {

@@ -42,11 +42,16 @@ async function login() {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding-top: 160rpx;
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 48rpx 32rpx;
+  padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
 }
 
 .form {
   width: 100%;
+  max-width: 640rpx;
+  margin: 0 auto;
   padding: 64rpx 40rpx;
   text-align: center;
 }

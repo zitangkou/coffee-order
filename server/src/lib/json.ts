@@ -21,7 +21,24 @@ export function stringifyJson(value: unknown): string {
 
 export function serializeProduct(product: any) {
   if (!product) return product;
-  return { ...product, specsJson: parseJson(product.specsJson, {}) };
+  const { specGroups, ...rest } = product;
+  return {
+    ...rest,
+    specGroups: (specGroups ?? []).map((psg: any) => ({
+      id: psg.specGroup.id,
+      name: psg.specGroup.name,
+      type: psg.specGroup.type,
+      required: psg.required,
+      sortOrder: psg.sortOrder,
+      options: (psg.specGroup.options ?? []).map((o: any) => ({
+        id: o.id,
+        label: o.label,
+        extraPrice: Number(o.extraPrice ?? 0),
+        isDefault: o.isDefault,
+        sortOrder: o.sortOrder,
+      })),
+    })),
+  };
 }
 
 export function serializeOrder(order: any) {

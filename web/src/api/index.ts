@@ -60,11 +60,25 @@ export const api = {
     request<any>({ url: "/admin/categories", method: "POST", data: { name }, admin: true }),
   adminDeleteCategory: (id: number) =>
     request<any>({ url: `/admin/categories/${id}`, method: "DELETE", admin: true }),
-  adminProducts: () => request<Product[]>({ url: "/admin/products", admin: true }),
+  adminProducts: (params: { keyword?: string; categoryId?: number; status?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.keyword) qs.set("keyword", params.keyword);
+    if (params.categoryId) qs.set("categoryId", String(params.categoryId));
+    if (params.status) qs.set("status", params.status);
+    const q = qs.toString();
+    return request<Product[]>({ url: `/admin/products${q ? `?${q}` : ""}`, admin: true });
+  },
   adminCreateProduct: (data: Partial<Product> & { categoryId: number }) =>
     request<Product>({ url: "/admin/products", method: "POST", data, admin: true }),
   adminUpdateProduct: (id: number, data: Partial<Product>) =>
     request<Product>({ url: `/admin/products/${id}`, method: "PUT", data, admin: true }),
+  adminSpecGroups: () =>
+    request<any[]>({ url: "/admin/spec-groups", admin: true }),
+  adminCreateSpecGroup: (data: {
+    name: string;
+    type: "SINGLE" | "MULTI";
+    options: { label: string; extraPrice: number; isDefault: boolean }[];
+  }) => request<any>({ url: "/admin/spec-groups", method: "POST", data, admin: true }),
   adminToggleSoldOut: (id: number, soldOut: boolean) =>
     request<Product>({ url: `/admin/products/${id}/sold-out`, method: "PATCH", data: { soldOut }, admin: true }),
   adminTables: () => request<Table[]>({ url: "/admin/tables", admin: true }),

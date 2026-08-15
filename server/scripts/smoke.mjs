@@ -142,6 +142,62 @@ async function main() {
     if (!json.data.imageUrl) throw new Error("未返回 imageUrl");
   });
 
+  await check("规格组列表", async () => {
+    const groups = await call("/admin/spec-groups", { token: globalThis.adminToken });
+    if (!groups.length) throw new Error("无规格组");
+    if (!groups.some((g) => g.options?.length)) throw new Error("规格组无选项");
+  });
+
+  await check("商品搜索", async () => {
+    const list = await call("/admin/products?keyword=拿铁&status=on", {
+      token: globalThis.adminToken,
+    });
+    if (!list.some((p) => p.name.includes("拿铁"))) throw new Error("搜索未命中");
+  });
+
+  await check("规格组 CRUD 与商品关联", async () => {
+    const pid = globalThis.firstProductId;
+    const all = await call("/admin/products", { token: globalThis.adminToken });
+    const product = all.find((p) => p.id === pid);
+    const beforeIds = (product?.specGroups ?? []).map((g) => ({
+      specGroupId: g.id,
+      required: g.required,
+    }));
+    const created = await call("/admin/spec-groups", {
+      method: "POST",
+      token: globalThis.adminToken,
+      body: {
+        name: `临时组${Date.now()}`,
+        type: "MULTI",
+        options: [{ label: "A", extraPrice: 0, isDefault: false }],
+      },
+    });
+    const updated = await call(`/admin/products/${pid}`, {
+      method: "PUT",
+      token: globalThis.adminToken,
+      body: { specGroupIds: [{ specGroupId: created.id, required: true }] },
+    });
+    if (!updated.specGroups.some((g) => g.id === created.id)) {
+      throw new Error("商品未关联新规格组");
+    }
+    // 被商品占用时应拒绝删除
+    const blocked = await fetch(`${BASE}/admin/spec-groups/${created.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${globalThis.adminToken}` },
+    });
+    if ((await blocked.json()).code === 0) throw new Error("被占用规格组不应可删除");
+    // 还原商品规格并清理临时组
+    await call(`/admin/products/${pid}`, {
+      method: "PUT",
+      token: globalThis.adminToken,
+      body: { specGroupIds: beforeIds },
+    });
+    await call(`/admin/spec-groups/${created.id}`, {
+      method: "DELETE",
+      token: globalThis.adminToken,
+    });
+  });
+
   await check("外带码生成", async () => {
     const data = await call("/admin/takeout-qrcode", {
       method: "POST",

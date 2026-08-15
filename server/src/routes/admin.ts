@@ -20,6 +20,19 @@ import {
 
 const router = Router();
 
+const specInclude = {
+  specGroups: {
+    orderBy: { sortOrder: "asc" },
+    include: {
+      specGroup: {
+        include: {
+          options: { orderBy: { sortOrder: "asc" }, where: { isActive: true } },
+        },
+      },
+    },
+  },
+} as const;
+
 // 商品图片上传：存储到 uploads/products，限制 5MB、仅图片
 const uploadDir = path.resolve(process.cwd(), "uploads/products");
 fs.mkdirSync(uploadDir, { recursive: true });
@@ -164,12 +177,33 @@ router.delete("/categories/:id", requireAdmin, async (req, res) => {
   ok(res, null, "分类已删除");
 });
 
-router.get("/products", requireAdmin, async (_req, res) => {
+router.get("/products", requireAdmin, async (req, res) => {
+  const keyword = str(req.query.keyword).trim();
+  const categoryId = req.query.categoryId ? num(req.query.categoryId) : undefined;
+  const status = str(req.query.status);
+  const where: Record<string, unknown> = {};
+  if (keyword) {
+    where.OR = [
+      { name: { contains: keyword } },
+      { nameEn: { contains: keyword } },
+      { flavorNotes: { contains: keyword } },
+    ];
+  }
+  if (categoryId) where.categoryId = categoryId;
+  if (status === "on") {
+    where.isActive = true;
+    where.isSoldOut = false;
+  } else if (status === "soldout") {
+    where.isSoldOut = true;
+  } else if (status === "off") {
+    where.isActive = false;
+  }
   ok(
     res,
     (await prisma.product.findMany({
+      where,
       orderBy: { sortOrder: "asc" },
-      include: { category: true },
+      include: { category: true, ...specInclude },
     })).map(serializeProduct)
   );
 });
@@ -177,6 +211,7 @@ router.get("/products", requireAdmin, async (_req, res) => {
 router.post("/products", requireAdmin, async (req, res) => {
   const body = req.body ?? {};
   if (!str(body.name).trim()) return fail(res, "商品名称不能为空");
+  const specGroupIds = Array.isArray(body.specGroupIds) ? body.specGroupIds : [];
   const product = await prisma.product.create({
     data: {
       categoryId: num(body.categoryId),
@@ -188,34 +223,61 @@ router.post("/products", requireAdmin, async (req, res) => {
       roastLevel: body.roastLevel ? str(body.roastLevel) : null,
       imageUrl: body.imageUrl ? str(body.imageUrl) : null,
       price: num(body.price),
-      specsJson: stringifyJson(body.specsJson ?? {}),
+      isSignature: body.isSignature === true,
+      isHot: body.isHot === true,
       sortOrder: num(body.sortOrder),
       isSoldOut: body.isSoldOut === true,
       isActive: body.isActive !== false,
+      specGroups: {
+        create: specGroupIds.map((s: any, idx: number) => ({
+          specGroupId: num(s?.specGroupId),
+          required: s?.required !== false,
+          sortOrder: idx,
+        })),
+      },
     },
+    include: specInclude,
   });
   ok(res, serializeProduct(product), "商品已创建");
 });
 
 router.put("/products/:id", requireAdmin, async (req, res) => {
   const body = req.body ?? {};
-  const product = await prisma.product.update({
-    where: { id: num(req.params.id) },
-    data: {
-      categoryId: body.categoryId !== undefined ? num(body.categoryId) : undefined,
-      name: body.name !== undefined ? str(body.name).trim() : undefined,
-      nameEn: body.nameEn !== undefined ? (str(body.nameEn) || null) : undefined,
-      description: body.description !== undefined ? (str(body.description) || null) : undefined,
-      flavorNotes: body.flavorNotes !== undefined ? (str(body.flavorNotes) || null) : undefined,
-      origin: body.origin !== undefined ? (str(body.origin) || null) : undefined,
-      roastLevel: body.roastLevel !== undefined ? (str(body.roastLevel) || null) : undefined,
-      imageUrl: body.imageUrl !== undefined ? (str(body.imageUrl) || null) : undefined,
-      price: body.price !== undefined ? num(body.price) : undefined,
-      specsJson: body.specsJson !== undefined ? stringifyJson(body.specsJson) : undefined,
-      sortOrder: body.sortOrder !== undefined ? num(body.sortOrder) : undefined,
-      isSoldOut: typeof body.isSoldOut === "boolean" ? body.isSoldOut : undefined,
-      isActive: typeof body.isActive === "boolean" ? body.isActive : undefined,
-    },
+  const id = num(req.params.id);
+  const specGroupIds = Array.isArray(body.specGroupIds) ? body.specGroupIds : undefined;
+  const product = await prisma.$transaction(async (tx) => {
+    if (specGroupIds) {
+      await tx.productSpecGroup.deleteMany({ where: { productId: id } });
+    }
+    return tx.product.update({
+      where: { id },
+      data: {
+        categoryId: body.categoryId !== undefined ? num(body.categoryId) : undefined,
+        name: body.name !== undefined ? str(body.name).trim() : undefined,
+        nameEn: body.nameEn !== undefined ? (str(body.nameEn) || null) : undefined,
+        description: body.description !== undefined ? (str(body.description) || null) : undefined,
+        flavorNotes: body.flavorNotes !== undefined ? (str(body.flavorNotes) || null) : undefined,
+        origin: body.origin !== undefined ? (str(body.origin) || null) : undefined,
+        roastLevel: body.roastLevel !== undefined ? (str(body.roastLevel) || null) : undefined,
+        imageUrl: body.imageUrl !== undefined ? (str(body.imageUrl) || null) : undefined,
+        price: body.price !== undefined ? num(body.price) : undefined,
+        isSignature: typeof body.isSignature === "boolean" ? body.isSignature : undefined,
+        isHot: typeof body.isHot === "boolean" ? body.isHot : undefined,
+        sortOrder: body.sortOrder !== undefined ? num(body.sortOrder) : undefined,
+        isSoldOut: typeof body.isSoldOut === "boolean" ? body.isSoldOut : undefined,
+        isActive: typeof body.isActive === "boolean" ? body.isActive : undefined,
+        specGroups: specGroupIds
+          ? {
+              create: specGroupIds.map((s: any, idx: number) => ({
+                specGroupId: num(s?.specGroupId),
+                required: s?.required !== false,
+                sortOrder: idx,
+              })),
+            }
+          : undefined,
+      },
+      include: specInclude,
+    });
   });
   ok(res, serializeProduct(product), "商品已更新");
 });
@@ -231,6 +293,87 @@ router.patch("/products/:id/sold-out", requireAdmin, async (req, res) => {
 router.delete("/products/:id", requireAdmin, async (req, res) => {
   await prisma.product.delete({ where: { id: num(req.params.id) } });
   ok(res, null, "商品已删除");
+});
+
+router.get("/spec-groups", requireAdmin, async (_req, res) => {
+  const groups = await prisma.specGroup.findMany({
+    orderBy: { sortOrder: "asc" },
+    include: {
+      options: { orderBy: { sortOrder: "asc" } },
+      _count: { select: { products: true } },
+    },
+  });
+  ok(res, groups);
+});
+
+router.post("/spec-groups", requireAdmin, async (req, res) => {
+  const body = req.body ?? {};
+  const name = str(body.name).trim();
+  if (!name) return fail(res, "规格组名称不能为空");
+  const options = Array.isArray(body.options)
+    ? body.options
+        .map((o: any, i: number) => ({
+          label: str(o?.label).trim(),
+          extraPrice: num(o?.extraPrice),
+          isDefault: o?.isDefault === true,
+          sortOrder: i,
+        }))
+        .filter((o: any) => o.label)
+    : [];
+  if (!options.length) return fail(res, "至少需要一个规格选项");
+  const group = await prisma.specGroup.create({
+    data: {
+      name,
+      type: body.type === "MULTI" ? "MULTI" : "SINGLE",
+      sortOrder: num(body.sortOrder),
+      options: { create: options },
+    },
+    include: { options: true },
+  });
+  ok(res, group, "规格组已创建");
+});
+
+router.put("/spec-groups/:id", requireAdmin, async (req, res) => {
+  const id = num(req.params.id);
+  const body = req.body ?? {};
+  const options = Array.isArray(body.options)
+    ? body.options
+        .map((o: any, i: number) => ({
+          label: str(o?.label).trim(),
+          extraPrice: num(o?.extraPrice),
+          isDefault: o?.isDefault === true,
+          sortOrder: i,
+        }))
+        .filter((o: any) => o.label)
+    : undefined;
+  if (options !== undefined && !options.length) {
+    return fail(res, "至少需要一个规格选项");
+  }
+  const group = await prisma.$transaction(async (tx) => {
+    if (options) {
+      await tx.specOption.deleteMany({ where: { groupId: id } });
+    }
+    return tx.specGroup.update({
+      where: { id },
+      data: {
+        name: body.name !== undefined ? str(body.name).trim() : undefined,
+        type: body.type !== undefined ? (body.type === "MULTI" ? "MULTI" : "SINGLE") : undefined,
+        sortOrder: body.sortOrder !== undefined ? num(body.sortOrder) : undefined,
+        options: options ? { create: options } : undefined,
+      },
+      include: { options: true },
+    });
+  });
+  ok(res, group, "规格组已更新");
+});
+
+router.delete("/spec-groups/:id", requireAdmin, async (req, res) => {
+  const id = num(req.params.id);
+  const linked = await prisma.productSpecGroup.count({ where: { specGroupId: id } });
+  if (linked > 0) return fail(res, "该规格组已被商品使用，无法删除");
+  await prisma.specOption.deleteMany({ where: { groupId: id } });
+  await prisma.specGroup.delete({ where: { id } });
+  ok(res, null, "规格组已删除");
 });
 
 router.get("/tables", requireAdmin, async (_req, res) => {

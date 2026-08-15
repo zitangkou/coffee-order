@@ -93,15 +93,55 @@ model Product {
   roastLevel  String?    @db.VarChar(50)
   imageUrl    String?    @db.VarChar(500)
   price       Decimal    @db.Decimal(10, 2)
-  specsJson   Json
+  isSignature Boolean    @default(false)
+  isHot       Boolean    @default(false)
   isSoldOut   Boolean    @default(false)
   isActive    Boolean    @default(true)
   sortOrder   Int        @default(0)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   orderItems  OrderItem[]
+  specGroups  ProductSpecGroup[]
 
   @@index([categoryId, isActive])
+}
+
+model SpecGroup {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique @db.VarChar(50)
+  type      String    @default("SINGLE") @db.VarChar(20)
+  sortOrder Int       @default(0)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  options   SpecOption[]
+  products  ProductSpecGroup[]
+}
+
+model SpecOption {
+  id         Int       @id @default(autoincrement())
+  groupId    Int
+  group      SpecGroup @relation(fields: [groupId], references: [id])
+  label      String    @db.VarChar(100)
+  extraPrice Decimal   @default(0) @db.Decimal(10, 2)
+  isDefault  Boolean   @default(false)
+  sortOrder  Int       @default(0)
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+
+  @@index([groupId])
+}
+
+model ProductSpecGroup {
+  id          Int       @id @default(autoincrement())
+  productId   Int
+  product     Product   @relation(fields: [productId], references: [id])
+  specGroupId Int
+  specGroup   SpecGroup @relation(fields: [specGroupId], references: [id])
+  required    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+
+  @@unique([productId, specGroupId])
 }
 
 model TableInfo {

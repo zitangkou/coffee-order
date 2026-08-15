@@ -21,20 +21,20 @@
     </view>
 
     <view class="card" v-if="specGroups.length">
-      <view v-for="group in specGroups" :key="group.name" class="spec-group">
+      <view v-for="group in specGroups" :key="group.id" class="spec-group">
         <view class="spec-name">
           {{ group.name }}
-          <text v-if="group.multiple" class="multi-hint">可多选</text>
+          <text class="multi-hint">{{ group.type === "MULTI" ? "可多选" : group.required ? "必选" : "选填" }}</text>
         </view>
         <view class="spec-options">
           <view
             v-for="opt in group.options"
-            :key="opt.label"
+            :key="opt.id"
             class="spec-opt"
-            :class="isSelected(group.name, opt.label) ? 'spec-opt-active' : ''"
+            :class="isSelected(group, opt) ? 'spec-opt-active' : ''"
             @tap="toggleOption(group, opt)"
           >
-            {{ opt.label }}<text v-if="opt.extra" class="opt-extra">+{{ opt.extra }}</text>
+            {{ opt.label }}<text v-if="opt.extraPrice" class="opt-extra">+{{ opt.extraPrice }}</text>
           </view>
         </view>
       </view>
@@ -69,7 +69,7 @@ import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import { api } from "../../api";
 import { useCartStore } from "../../stores/cart";
-import type { Product, SpecOption } from "../../types";
+import type { Product, SpecGroup, SpecOption } from "../../types";
 
 const product = ref<Product | null>(null);
 const quantity = ref(1);
@@ -78,12 +78,7 @@ const selections = ref<Record<string, string[]>>({});
 const cart = useCartStore();
 
 const specGroups = computed(() => {
-  if (!product.value) return [];
-  return Object.entries(product.value.specsJson).map(([name, def]) => {
-    const multiple = !Array.isArray(def) && (def as any)?.multiple === true;
-    const options = Array.isArray(def) ? def : ((def as any)?.options ?? []);
-    return { name, options, multiple };
-  });
+  return product.value?.specGroups ?? [];
 });
 
 const unitPrice = computed(() => {
@@ -93,7 +88,7 @@ const unitPrice = computed(() => {
     const sel = selections.value[group.name] ?? [];
     for (const label of sel) {
       const opt = group.options.find((o) => o.label === label);
-      if (opt) total += Number(opt.extra || 0);
+      if (opt) total += Number(opt.extraPrice || 0);
     }
   }
   return Math.round(total * 100) / 100;
@@ -103,23 +98,41 @@ onLoad(async (options) => {
   const id = Number((options as any)?.id);
   try {
     product.value = await api.getProduct(id);
+    initSelections();
   } catch (e: any) {
     uni.showToast({ title: e.message || "加载失败", icon: "none" });
   }
 });
 
-function isSelected(groupName: string, label: string) {
-  return (selections.value[groupName] ?? []).includes(label);
+function initSelections() {
+  const sel: Record<string, string[]> = {};
+  for (const group of specGroups.value) {
+    const defaults = group.options.filter((o) => o.isDefault).map((o) => o.label);
+    if (group.type === "MULTI") {
+      sel[group.name] = defaults;
+    } else if (defaults.length) {
+      sel[group.name] = [defaults[0]];
+    } else if (group.required && group.options.length) {
+      sel[group.name] = [group.options[0].label];
+    } else {
+      sel[group.name] = [];
+    }
+  }
+  selections.value = sel;
+}
+
+function isSelected(group: SpecGroup, opt: SpecOption) {
+  return (selections.value[group.name] ?? []).includes(opt.label);
 }
 
 function toggleOption(
-  group: { name: string; options: SpecOption[]; multiple: boolean },
+  group: SpecGroup,
   opt: SpecOption
 ) {
   const current = selections.value[group.name] ?? [];
   if (current.includes(opt.label)) {
     selections.value[group.name] = current.filter((l) => l !== opt.label);
-  } else if (group.multiple) {
+  } else if (group.type === "MULTI") {
     selections.value[group.name] = [...current, opt.label];
   } else {
     // 单选组：组内互斥
@@ -136,7 +149,7 @@ function addToCart() {
   const specs: Record<string, string | string[]> = {};
   for (const group of specGroups.value) {
     const sel = selections.value[group.name] ?? [];
-    if (sel.length) specs[group.name] = group.multiple ? sel : sel[0];
+    if (sel.length) specs[group.name] = group.type === "MULTI" ? sel : sel[0];
   }
   cart.add({
     productId: product.value.id,

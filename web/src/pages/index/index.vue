@@ -8,14 +8,14 @@
         <view
           class="mode"
           :class="user.orderType === 'DINE_IN' ? 'mode-active' : ''"
-          @tap="switchMode('DINE_IN')"
+          @tap="onModeTap('DINE_IN')"
         >
-          堂食{{ user.tableNo ? " · " + user.tableNo : "" }}
+          堂食{{ user.tableNo ? " · " + user.tableNo : "" }}<text class="mode-arrow">▾</text>
         </view>
         <view
           class="mode"
           :class="user.orderType === 'TAKEOUT' ? 'mode-active' : ''"
-          @tap="switchMode('TAKEOUT')"
+          @tap="onModeTap('TAKEOUT')"
         >
           外带
         </view>
@@ -24,13 +24,16 @@
 
     <scroll-view scroll-x class="cats" :show-scrollbar="false">
       <view
-        v-for="c in categories"
-        :key="c.id"
+        v-for="chip in quickChips"
+        :key="chip.key"
         class="cat"
-        :class="activeCat === c.id ? 'cat-active' : ''"
-        @tap="switchCat(c.id)"
+        :class="activeTab === chip.key ? 'cat-active' : ''"
+        @tap="switchTab(chip.key)"
       >
-        {{ c.name }}
+        {{ chip.label }}
+      </view>
+      <view class="cat cat-trigger" @tap="showCatDrawer = true">
+        {{ activeTabName }}<text class="mode-arrow">▾</text>
       </view>
     </scroll-view>
 
@@ -40,6 +43,10 @@
           <image v-if="p.imageUrl" :src="p.imageUrl" mode="aspectFill" class="p-img-img" />
           <text v-else class="p-img-text">{{ p.name.slice(0, 1) }}</text>
           <view v-if="p.isSoldOut" class="sold-out">售罄</view>
+          <view class="badges">
+            <text v-if="p.isSignature" class="badge badge-accent">招牌</text>
+            <text v-if="p.isHot" class="badge badge-warning">热销</text>
+          </view>
         </view>
         <view class="p-info">
           <view class="p-name">
@@ -47,12 +54,9 @@
             <text v-if="p.nameEn" class="p-en">{{ p.nameEn }}</text>
           </view>
           <view v-if="p.flavorNotes" class="p-notes">{{ p.flavorNotes }}</view>
-          <view class="p-meta">
-            <text v-if="p.roastLevel" class="tag tag-light">{{ p.roastLevel }}</text>
-          </view>
           <view class="p-bottom">
             <text class="price">¥{{ p.price }}</text>
-            <view class="add-btn" @tap.stop="goDetail(p.id)">＋</view>
+            <view class="add-btn" @tap.stop="openSpecSheet(p)">＋</view>
           </view>
         </view>
       </view>
@@ -68,6 +72,47 @@
       </view>
       <view class="cart-btn" @tap="goCheckout">去结算</view>
     </view>
+
+    <!-- 分类抽屉 -->
+    <view v-if="showCatDrawer" class="mask" @tap="showCatDrawer = false">
+      <view class="sheet" @tap.stop>
+        <view class="sheet-title">选择分类</view>
+        <input v-model="catKeyword" class="cat-search" placeholder="搜索分类" />
+        <scroll-view scroll-y class="cat-list">
+          <view
+            v-for="c in filteredCats"
+            :key="c.id"
+            class="cat-item"
+            :class="activeTab === c.id ? 'cat-item-active' : ''"
+            @tap="pickCategory(c)"
+          >
+            {{ c.name }}
+            <text class="cat-count">{{ c.products.length }}</text>
+          </view>
+          <view v-if="!filteredCats.length" class="empty">没有匹配的分类</view>
+        </scroll-view>
+      </view>
+    </view>
+
+    <!-- 选桌浮层 -->
+    <view v-if="showTablePicker" class="mask" @tap="showTablePicker = false">
+      <view class="sheet" @tap.stop>
+        <view class="sheet-title">选择桌号</view>
+        <view class="table-grid">
+          <view
+            v-for="t in tables"
+            :key="t.id"
+            class="table-item"
+            :class="user.tableId === t.id ? 'table-active' : ''"
+            @tap="pickTable(t)"
+          >
+            {{ t.tableNo }}
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <SpecSheet v-model:show="showSpecSheet" :product="activeProduct" @add="onAddToCart" />
   </view>
 </template>
 
@@ -78,17 +123,47 @@ import { api } from "../../api";
 import { useCartStore } from "../../stores/cart";
 import { useUserStore } from "../../stores/user";
 import { applyTableId } from "../../utils/table";
-import type { Category, Shop } from "../../types";
+import SpecSheet from "../../components/SpecSheet.vue";
+import type { Category, Product, Shop, Table } from "../../types";
 
 const user = useUserStore();
 const cart = useCartStore();
 const categories = ref<Category[]>([]);
 const shop = ref<Shop | null>(null);
-const activeCat = ref(0);
+const tables = ref<Table[]>([]);
+const activeTab = ref<"all" | "signature" | "hot" | number>("all");
+const showCatDrawer = ref(false);
+const catKeyword = ref("");
+const showTablePicker = ref(false);
+const activeProduct = ref<Product | null>(null);
+const showSpecSheet = ref(false);
+
+const quickChips = [
+  { key: "all", label: "全部" },
+  { key: "signature", label: "招牌" },
+  { key: "hot", label: "热销" },
+];
+
+const activeTabName = computed(() => {
+  if (typeof activeTab.value === "number") {
+    return categories.value.find((c) => c.id === activeTab.value)?.name || "分类";
+  }
+  return quickChips.find((c) => c.key === activeTab.value)?.label || "分类";
+});
 
 const currentProducts = computed(() => {
-  const cat = categories.value.find((c) => c.id === activeCat.value);
-  return cat?.products ?? [];
+  const all = categories.value.flatMap((c) => c.products);
+  if (activeTab.value === "signature") return all.filter((p) => p.isSignature);
+  if (activeTab.value === "hot") return all.filter((p) => p.isHot);
+  if (typeof activeTab.value === "number") {
+    return categories.value.find((c) => c.id === activeTab.value)?.products ?? [];
+  }
+  return all;
+});
+
+const filteredCats = computed(() => {
+  const kw = catKeyword.value.trim();
+  return categories.value.filter((c) => !kw || c.name.includes(kw));
 });
 
 onLoad(async (options) => {
@@ -107,22 +182,65 @@ onShow(() => {
 
 async function loadData() {
   try {
-    const [cats, s] = await Promise.all([api.getCategories(), api.getShop()]);
+    const [cats, s, ts] = await Promise.all([api.getCategories(), api.getShop(), api.getTables()]);
     categories.value = cats;
     shop.value = s;
-    if (!activeCat.value && cats.length) activeCat.value = cats[0].id;
+    tables.value = ts;
   } catch (e: any) {
     uni.showToast({ title: e.message || "加载失败", icon: "none" });
   }
 }
 
-function switchCat(id: number) {
-  activeCat.value = id;
+function switchTab(key: "all" | "signature" | "hot") {
+  activeTab.value = key;
 }
 
-function switchMode(type: "DINE_IN" | "TAKEOUT") {
-  user.setOrderType(type);
-  if (type === "TAKEOUT") user.setTable(null);
+function pickCategory(c: Category) {
+  activeTab.value = c.id;
+  showCatDrawer.value = false;
+}
+
+function onModeTap(type: "DINE_IN" | "TAKEOUT") {
+  if (type === "TAKEOUT") {
+    user.setOrderType("TAKEOUT");
+    return;
+  }
+  user.setOrderType("DINE_IN");
+  if (!user.tableId) {
+    showTablePicker.value = true;
+  } else if (type === user.orderType) {
+    showTablePicker.value = true;
+  }
+}
+
+function pickTable(t: Table) {
+  user.setTable(t);
+  showTablePicker.value = false;
+}
+
+function openSpecSheet(p: Product) {
+  activeProduct.value = p;
+  showSpecSheet.value = true;
+}
+
+function onAddToCart(payload: {
+  product: Product;
+  specs: Record<string, string | string[]>;
+  quantity: number;
+  remark: string;
+  unitPrice: number;
+}) {
+  cart.add({
+    productId: payload.product.id,
+    name: payload.product.name,
+    image: payload.product.imageUrl,
+    specs: payload.specs,
+    unitPrice: payload.unitPrice,
+    quantity: payload.quantity,
+  });
+  if (payload.remark) cart.remark = payload.remark;
+  showSpecSheet.value = false;
+  uni.showToast({ title: "已加入购物车", icon: "success" });
 }
 
 function goDetail(id: number) {
@@ -196,6 +314,11 @@ function goAdmin() {
   font-weight: 600;
 }
 
+.mode-arrow {
+  margin-left: 8rpx;
+  font-size: 20rpx;
+}
+
 .cats {
   white-space: nowrap;
   margin: 24rpx 0 8rpx;
@@ -203,9 +326,10 @@ function goAdmin() {
 
 .cat {
   display: inline-block;
-  padding: 12rpx 28rpx;
+  padding: 14rpx 30rpx;
   margin-right: 16rpx;
   background: #fff;
+  border: 1px solid #ece4da;
   border-radius: 24px;
   color: #6b625b;
   font-size: 26rpx;
@@ -214,7 +338,14 @@ function goAdmin() {
 .cat-active {
   background: #2f2a26;
   color: #fff;
+  border-color: #2f2a26;
   font-weight: 600;
+}
+
+.cat-trigger {
+  color: #6b4f2f;
+  background: #f0e9df;
+  border-color: #e0d0ba;
 }
 
 .products {
@@ -263,6 +394,14 @@ function goAdmin() {
   padding: 6rpx 0;
 }
 
+.badges {
+  position: absolute;
+  top: 12rpx;
+  left: 12rpx;
+  display: flex;
+  gap: 8rpx;
+}
+
 .p-name {
   font-size: 28rpx;
   font-weight: 600;
@@ -283,10 +422,6 @@ function goAdmin() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.p-meta {
-  margin-top: 8rpx;
 }
 
 .p-bottom {
@@ -361,5 +496,82 @@ function goAdmin() {
   line-height: 76rpx;
   padding: 0 40rpx;
   font-weight: 600;
+}
+
+.mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 99;
+  display: flex;
+  align-items: flex-end;
+}
+
+.sheet {
+  background: #fff;
+  width: 100%;
+  border-radius: 24px 24px 0 0;
+  padding: 32rpx;
+  padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
+  max-height: 70vh;
+}
+
+.sheet-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  margin-bottom: 24rpx;
+}
+
+.cat-search {
+  background: #f7f4f0;
+  border-radius: 12px;
+  padding: 16rpx 20rpx;
+  font-size: 26rpx;
+  margin-bottom: 20rpx;
+}
+
+.cat-list {
+  max-height: 48vh;
+}
+
+.cat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24rpx 20rpx;
+  border-radius: 12px;
+  font-size: 28rpx;
+  color: #4a3d31;
+}
+
+.cat-item-active {
+  background: #2f2a26;
+  color: #fff;
+}
+
+.cat-count {
+  color: #b9b0a6;
+  font-size: 22rpx;
+}
+
+.table-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20rpx;
+}
+
+.table-item {
+  width: 150rpx;
+  text-align: center;
+  padding: 20rpx 0;
+  border-radius: 12px;
+  border: 1px solid #e0d8cd;
+  font-size: 28rpx;
+}
+
+.table-active {
+  background: #2f2a26;
+  color: #fff;
+  border-color: #2f2a26;
 }
 </style>
