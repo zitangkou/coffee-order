@@ -158,6 +158,14 @@
 
 *更新进度时同步维护本文件，保证后续会话可以快速接续。*
 
+## 11. 部署与协作进展（2026-08-15 晚）
+
+- 云服务器（腾讯云 124.223.178.64，Ubuntu 22.04）已按**方案 B（域名网关）**切换：coffee compose 显式 `name: coffee-order`，web 只监听 `127.0.0.1:8080`；宿主机 Nginx 做网关（`server_name _` 转发 8080）。
+- Docker 全局配置已拆为一次性 `deploy/setup-docker.sh`；`deploy.sh` 仅构建启动本项目。
+- 多项目：`docs/多项目部署指南.md` + 可复制模板 `deploy/project-template/`（8081 起步）。
+- 兄弟项目 zhixing-gongkao（知行公考）确认已自带 Docker 化（8081，H5+Python 后端+管理后台），无需套模板；过渡期直接 IP:8081，正式期走网关域名 server 块。注意其 Dockerfile 禁用 alpine（Taro binding 需 glibc）。
+- 待办：迭代 C（安全 P0：支付回调验签/HTTPS/接口限流/数据库备份自动化；会员储值；监控告警）。支付与 HTTPS 相关项在正式营业前必须完成。
+
 ---
 
 ## 9. 迭代 A（P0）完成记录 · 2026-08-15
