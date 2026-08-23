@@ -28,7 +28,7 @@ export function requestPayment(params: Record<string, string>): Promise<boolean>
   return new Promise((resolve) => {
     // #ifdef MP-WEIXIN
     uni.requestPayment({
-      provider: "weixin",
+      provider: "wxpay",
       ...params,
       success: () => resolve(true),
       fail: () => resolve(false),

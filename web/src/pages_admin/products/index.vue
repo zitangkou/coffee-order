@@ -100,7 +100,7 @@
             <view class="f-label">新建规格组</view>
             <view class="ng-row">
               <input v-model="newGroup.name" class="f-input" placeholder="组名，如：糖度" />
-              <picker :range="['SINGLE', 'MULTI']" @change="(e:any)=>newGroup.type=['SINGLE','MULTI'][Number(e.detail.value)]">
+              <picker :range="['SINGLE', 'MULTI']" @change="onGroupTypeChange">
                 <view class="mini-btn">{{ newGroup.type === "MULTI" ? "多选" : "单选" }}</view>
               </picker>
             </view>
@@ -143,6 +143,10 @@ const newGroup = reactive({
   type: "SINGLE" as "SINGLE" | "MULTI",
   options: [{ label: "", extraPrice: 0, isDefault: false }],
 });
+
+function onGroupTypeChange(e: any) {
+  newGroup.type = Number(e.detail.value) === 1 ? "MULTI" : "SINGLE";
+}
 
 onShow(loadAll);
 

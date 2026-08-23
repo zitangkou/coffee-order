@@ -23,7 +23,7 @@ export function request<T>(options: RequestOptions): Promise<T> {
 
     uni.request({
       url: API_BASE + options.url,
-      method: options.method || "GET",
+      method: (options.method || "GET") as UniApp.RequestOptions["method"],
       data: options.data as any,
       header,
       timeout: 15000,

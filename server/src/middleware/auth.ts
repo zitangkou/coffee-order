@@ -21,6 +21,16 @@ export function optionalUser(req: Request, _res: Response, next: NextFunction) {
   next();
 }
 
+export function requireUser(req: Request, res: Response, next: NextFunction) {
+  const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  const payload = token ? verify<UserPayload>(token) : null;
+  if (!payload || payload.type !== "user") {
+    return fail(res, "请先登录", 401, 401);
+  }
+  (req as any).userId = payload.id;
+  next();
+}
+
 export function requireManager(req: Request, res: Response, next: NextFunction) {
   const admin = (req as any).admin as AdminPayload | undefined;
   if (!admin || admin.role !== "MANAGER") {

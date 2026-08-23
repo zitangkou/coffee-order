@@ -111,10 +111,14 @@ export async function createOrder(input: CreateOrderInput) {
 }
 
 export async function mockPay(orderId: number, userId?: number) {
+  if (process.env.MOCK_PAYMENT !== "true") {
+    throw new Error("模拟支付未启用");
+  }
+  if (!userId) throw new Error("请先登录");
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new Error("订单不存在");
   if (order.status !== "UNPAID") throw new Error("订单状态不允许支付");
-  if (userId && order.userId && order.userId !== userId) {
+  if (!order.userId || order.userId !== userId) {
     throw new Error("无权操作该订单");
   }
   await prisma.$transaction([
@@ -134,9 +138,9 @@ export async function mockPay(orderId: number, userId?: number) {
   return updated;
 }
 
-export async function wechatPay(orderId: number) {
+export async function wechatPay(orderId: number, userId: number) {
   // H5 开发阶段：微信支付预留；小程序阶段接入商户号统一下单
-  return mockPay(orderId);
+  return mockPay(orderId, userId);
 }
 
 const transitions: Record<string, OrderStatus[]> = {
@@ -182,7 +186,7 @@ export async function requestRefund(
 ) {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new Error("订单不存在");
-  if (userId && order.userId && order.userId !== userId) {
+  if (!userId || !order.userId || order.userId !== userId) {
     throw new Error("无权操作该订单");
   }
   if (!["PAID", "MAKING", "READY", "COMPLETED"].includes(order.status)) {

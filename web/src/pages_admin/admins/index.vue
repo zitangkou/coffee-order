@@ -7,7 +7,7 @@
       <view class="f-label">初始密码（至少 8 位）</view>
       <input v-model="newPassword" class="f-input" password placeholder="初始密码" />
       <view class="f-label">角色</view>
-      <picker :range="['店员 STAFF', '店长 MANAGER']" @change="(e:any)=>newRole=['STAFF','MANAGER'][Number(e.detail.value)]">
+      <picker :range="['店员 STAFF', '店长 MANAGER']" @change="onRoleChange">
         <view class="f-input">{{ newRole === "MANAGER" ? "店长 MANAGER" : "店员 STAFF" }}</view>
       </picker>
       <view class="btn-primary create-btn" @tap="create">创建管理员</view>
@@ -58,6 +58,10 @@ const newUsername = ref("");
 const newPassword = ref("");
 const newRole = ref<"STAFF" | "MANAGER">("STAFF");
 
+function onRoleChange(e: any) {
+  newRole.value = Number(e.detail.value) === 1 ? "MANAGER" : "STAFF";
+}
+
 onShow(load);
 
 async function load() {
@@ -71,7 +75,7 @@ async function load() {
 }
 
 async function create() {
-  if (!newUsername.value.trim() || newPassword.value.length < 6) {
+  if (!newUsername.value.trim() || newPassword.value.length < 8) {
     uni.showToast({ title: "用户名必填，密码至少 8 位", icon: "none" });
     return;
   }
@@ -126,7 +130,7 @@ async function resetPassword(a: any) {
       success: (m) => resolve(m.confirm ? m.content || "" : ""),
     });
   });
-  if (!res || res.length < 6) {
+  if (!res || res.length < 8) {
     uni.showToast({ title: "密码至少 8 位", icon: "none" });
     return;
   }

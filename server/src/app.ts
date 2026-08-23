@@ -8,7 +8,21 @@ import adminRouter from "./routes/admin.js";
 
 export function createApp() {
   const app = express();
-  app.use(cors());
+  const allowedOrigins = (process.env.CORS_ORIGINS || process.env.WEB_BASE_URL || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  app.use(
+    cors({
+      origin(origin, callback) {
+        // 小程序及服务间请求通常不携带 Origin；浏览器请求仅允许配置的站点。
+        if (!origin || process.env.NODE_ENV !== "production" || allowedOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+        callback(new Error("CORS origin not allowed"));
+      },
+    })
+  );
   app.use(
     express.json({
       limit: "1mb",

@@ -100,6 +100,8 @@ export const api = {
     request<Product>({ url: "/admin/products", method: "POST", data, admin: true }),
   adminUpdateProduct: (id: number, data: Partial<Product>) =>
     request<Product>({ url: `/admin/products/${id}`, method: "PUT", data, admin: true }),
+  adminDeleteProduct: (id: number) =>
+    request<any>({ url: `/admin/products/${id}`, method: "DELETE", admin: true }),
   adminSpecGroups: () =>
     request<any[]>({ url: "/admin/spec-groups", admin: true }),
   adminCreateSpecGroup: (data: {

@@ -59,6 +59,12 @@
       <view v-else class="card empty">还没有消费记录，去点一杯咖啡吧</view>
     </template>
 
+    <view class="legal-links">
+      <text @tap="goLegal('privacy')">隐私政策</text>
+      <text class="dot">·</text>
+      <text @tap="goLegal('terms')">用户服务协议</text>
+    </view>
+
     <view v-if="!profile" class="empty">加载中...</view>
   </view>
 </template>
@@ -167,6 +173,10 @@ function statusClass(s: OrderStatus) {
 function goOrder(id: number) {
   uni.navigateTo({ url: `/pages/order/detail?id=${id}` });
 }
+
+function goLegal(page: "privacy" | "terms") {
+  uni.navigateTo({ url: `/pages/legal/${page}` });
+}
 </script>
 
 <style lang="scss" scoped>
@@ -175,6 +185,19 @@ function goOrder(id: number) {
   align-items: center;
   gap: 24rpx;
   background: linear-gradient(160deg, #2f2a26, #4a3d31);
+}
+
+.legal-links {
+  display: flex;
+  justify-content: center;
+  gap: 16rpx;
+  padding: 28rpx 0 calc(28rpx + env(safe-area-inset-bottom));
+  color: #7a6c60;
+  font-size: 24rpx;
+}
+
+.dot {
+  color: #b7aaa0;
 }
 
 .avatar {

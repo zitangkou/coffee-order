@@ -19,6 +19,21 @@ async function call(path, { method = "GET", token, body } = {}) {
   return json.data;
 }
 
+async function expectRejected(path, { method = "GET", token, body, platform } = {}) {
+  const res = await fetch(BASE + path, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(platform ? { "X-Platform": platform } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const json = await res.json();
+  if (json.code === 0) throw new Error(`${path} 不应成功`);
+  return { status: res.status, json };
+}
+
 function check(name, fn) {
   return Promise.resolve()
     .then(fn)
@@ -83,6 +98,29 @@ async function main() {
     });
     if (!order.id || !order.pickupNo) throw new Error("订单字段缺失");
     globalThis.orderId = order.id;
+  });
+
+  await check("订单接口拒绝匿名与跨用户访问", async () => {
+    await expectRejected(`/orders/${globalThis.orderId}`);
+    await expectRejected(`/orders/${globalThis.orderId}/mock-pay`, { method: "POST" });
+    await expectRejected(`/orders/${globalThis.orderId}/refund`, {
+      method: "POST",
+      body: { reason: "越权测试" },
+    });
+    const other = await call("/auth/guest", {
+      method: "POST",
+      body: { deviceId: `smoke-other-${Date.now()}` },
+    });
+    await expectRejected(`/orders/${globalThis.orderId}`, { token: other.token });
+    await expectRejected(`/orders/${globalThis.orderId}/mock-pay`, {
+      method: "POST",
+      token: other.token,
+    });
+    await expectRejected(`/orders/${globalThis.orderId}/refund`, {
+      method: "POST",
+      token: other.token,
+      body: { reason: "越权测试" },
+    });
   });
 
   await check("模拟支付", async () => {

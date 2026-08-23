@@ -4,6 +4,16 @@ import { cancelStaleOrders } from "./services/order.js";
 
 const port = Number(process.env.PORT || 3000);
 
+if (process.env.NODE_ENV === "production") {
+  const jwtSecret = process.env.JWT_SECRET || "";
+  if (jwtSecret.length < 32 || /please-change|dev-secret|coffee-os/i.test(jwtSecret)) {
+    throw new Error("生产环境 JWT_SECRET 必须设置为至少 32 位的随机强密钥");
+  }
+  if (process.env.MOCK_PAYMENT === "true") {
+    throw new Error("生产环境禁止启用 MOCK_PAYMENT");
+  }
+}
+
 createApp().listen(port, () => {
   console.log(`[coffee-os] server listening on http://localhost:${port}`);
 });

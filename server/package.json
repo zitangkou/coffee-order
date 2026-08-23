@@ -12,7 +12,8 @@
     "seed": "node --import tsx prisma/seed.ts",
     "dump:specs": "node --import tsx prisma/dump-specs.ts",
     "migrate:specs": "node --import tsx prisma/migrate-specs.ts",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "security": "npm run build && node scripts/security.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

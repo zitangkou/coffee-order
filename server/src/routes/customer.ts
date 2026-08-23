@@ -4,7 +4,7 @@ import { num, str } from "../lib/validate.js";
 import { fail, ok } from "../lib/response.js";
 import { signUser } from "../lib/jwt.js";
 import { serializeOrder, serializeProduct } from "../lib/json.js";
-import { optionalUser } from "../middleware/auth.js";
+import { optionalUser, requireUser } from "../middleware/auth.js";
 import { createOrder, mockPay, requestRefund, wechatPay } from "../services/order.js";
 import { handlePaymentCallback } from "../services/payment.js";
 import { memberProfile } from "../services/member.js";
@@ -132,7 +132,7 @@ router.post("/auth/send-code", async (req, res) => {
   ok(res, { devCode: isConsoleSms() ? code : undefined }, "验证码已发送");
 });
 
-router.post("/user/phone", optionalUser, async (req, res) => {
+router.post("/user/phone", requireUser, async (req, res) => {
   const userId = (req as any).userId;
   if (!userId) return fail(res, "请先登录");
   const phone = str(req.body?.phone, "").trim();
@@ -156,7 +156,7 @@ router.post("/user/phone", optionalUser, async (req, res) => {
 });
 
 // 保存用户订阅消息授权（出餐通知模板）
-router.post("/user/subscribe", optionalUser, async (req, res) => {
+router.post("/user/subscribe", requireUser, async (req, res) => {
   const userId = (req as any).userId;
   if (!userId) return fail(res, "请先登录");
   const templateId = str(req.body?.templateId, "").trim();
@@ -169,13 +169,13 @@ router.post("/user/subscribe", optionalUser, async (req, res) => {
   ok(res, null, "订阅已保存");
 });
 
-router.get("/user/profile", optionalUser, async (req, res) => {
+router.get("/user/profile", requireUser, async (req, res) => {
   const userId = (req as any).userId;
   if (!userId) return fail(res, "请先登录");
   ok(res, await memberProfile(userId));
 });
 
-router.post("/orders", optionalUser, async (req, res) => {
+router.post("/orders", requireUser, async (req, res) => {
   const body = req.body ?? {};
   const userId = (req as any).userId;
   try {
@@ -193,7 +193,7 @@ router.post("/orders", optionalUser, async (req, res) => {
   }
 });
 
-router.post("/orders/:id/mock-pay", optionalUser, async (req, res) => {
+router.post("/orders/:id/mock-pay", requireUser, async (req, res) => {
   try {
     const order = await mockPay(num(req.params.id), (req as any).userId);
     ok(res, serializeOrder(order), "支付成功");
@@ -202,13 +202,14 @@ router.post("/orders/:id/mock-pay", optionalUser, async (req, res) => {
   }
 });
 
-router.post("/orders/:id/pay", optionalUser, async (req, res) => {
+router.post("/orders/:id/pay", requireUser, async (req, res) => {
   try {
     const platform = str(req.headers["x-platform"] || "");
     if (platform === "mp-weixin") {
       // 小程序端：返回 wx.requestPayment 参数（未配置时 fail-closed）
       const order = await prisma.order.findUnique({ where: { id: num(req.params.id) } });
       if (!order) return fail(res, "订单不存在");
+      if (!order.userId || order.userId !== (req as any).userId) return fail(res, "无权操作该订单", 403, 403);
       if (order.status !== "UNPAID") return fail(res, "订单状态不允许支付");
       if (!wxPayConfigured()) return fail(res, "微信支付未配置（WECHAT_MCH_ID/SERIAL/私钥/APIv3密钥）");
       const user = order.userId
@@ -219,7 +220,7 @@ router.post("/orders/:id/pay", optionalUser, async (req, res) => {
       return ok(res, { payParams });
     }
     // H5 等非小程序端：暂用模拟支付
-    const order = await wechatPay(num(req.params.id));
+    const order = await wechatPay(num(req.params.id), (req as any).userId);
     ok(res, serializeOrder(order), "支付成功");
   } catch (e: any) {
     fail(res, e?.message || "支付失败");
@@ -239,7 +240,7 @@ router.post("/payment/callback", async (req, res) => {
   }
 });
 
-router.get("/orders/my", optionalUser, async (req, res) => {
+router.get("/orders/my", requireUser, async (req, res) => {
   const userId = (req as any).userId;
   if (!userId) return ok(res, []);
   const orders = await prisma.order.findMany({
@@ -250,18 +251,18 @@ router.get("/orders/my", optionalUser, async (req, res) => {
   ok(res, orders.map(serializeOrder));
 });
 
-router.get("/orders/:id", optionalUser, async (req, res) => {
+router.get("/orders/:id", requireUser, async (req, res) => {
   const order = await prisma.order.findUnique({
     where: { id: num(req.params.id) },
     include: { items: true, table: true, payments: true, refunds: true },
   });
   if (!order) return fail(res, "订单不存在");
   const userId = (req as any).userId;
-  if (userId && order.userId && order.userId !== userId) return fail(res, "无权查看该订单");
+  if (!order.userId || order.userId !== userId) return fail(res, "无权查看该订单", 403, 403);
   ok(res, serializeOrder(order));
 });
 
-router.post("/orders/:id/refund", optionalUser, async (req, res) => {
+router.post("/orders/:id/refund", requireUser, async (req, res) => {
   try {
     const order = await requestRefund(
       num(req.params.id),
