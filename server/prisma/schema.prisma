@@ -11,46 +11,46 @@ datasource db {
 }
 
 model Admin {
-  id           Int     @id @default(autoincrement())
-  username     String  @unique
-  passwordHash String
-  role         String  @default("STAFF")
-  status       String  @default("ACTIVE")
-  mustChangePassword Boolean @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  refunds      Refund[]
-  auditLogs    AuditLog[]
+  id                 Int        @id @default(autoincrement())
+  username           String     @unique
+  passwordHash       String
+  role               String     @default("STAFF")
+  status             String     @default("ACTIVE")
+  mustChangePassword Boolean    @default(false)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  refunds            Refund[]
+  auditLogs          AuditLog[]
 }
 
 model AuditLog {
-  id         Int       @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   adminId    Int?
-  admin      Admin?    @relation(fields: [adminId], references: [id])
+  admin      Admin?   @relation(fields: [adminId], references: [id])
   action     String
   targetType String?
   targetId   Int?
   detail     String?
-  createdAt  DateTime  @default(now())
+  createdAt  DateTime @default(now())
 
   @@index([createdAt])
 }
 
 model ShopSetting {
-  id                  Int      @id @default(1)
-  name                String   @default("Coffee OS")
-  slogan              String?
-  logoUrl             String?
-  announcement        String?
-  businessHours       String?
-  acceptOrders        Boolean  @default(true)
-  dineInEnabled       Boolean  @default(true)
-  takeoutEnabled      Boolean  @default(true)
-  packFee             Float    @default(0)
-  refundEnabled       Boolean  @default(true)
-  takeoutPhoneRequired Boolean @default(false)
-  printerConfig       String?
-  updatedAt           DateTime @updatedAt
+  id                   Int      @id @default(1)
+  name                 String   @default("Coffee OS")
+  slogan               String?
+  logoUrl              String?
+  announcement         String?
+  businessHours        String?
+  acceptOrders         Boolean  @default(true)
+  dineInEnabled        Boolean  @default(true)
+  takeoutEnabled       Boolean  @default(true)
+  packFee              Float    @default(0)
+  refundEnabled        Boolean  @default(true)
+  takeoutPhoneRequired Boolean  @default(false)
+  printerConfig        String?
+  updatedAt            DateTime @updatedAt
 }
 
 model Category {
@@ -63,9 +63,9 @@ model Category {
 }
 
 model Product {
-  id          Int        @id @default(autoincrement())
+  id          Int                @id @default(autoincrement())
   categoryId  Int
-  category    Category   @relation(fields: [categoryId], references: [id])
+  category    Category           @relation(fields: [categoryId], references: [id])
   name        String
   nameEn      String?
   description String?
@@ -74,13 +74,13 @@ model Product {
   roastLevel  String?
   imageUrl    String?
   price       Float
-  isSignature Boolean    @default(false)
-  isHot       Boolean    @default(false)
-  isSoldOut   Boolean    @default(false)
-  isActive    Boolean    @default(true)
-  sortOrder   Int        @default(0)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  isSignature Boolean            @default(false)
+  isHot       Boolean            @default(false)
+  isSoldOut   Boolean            @default(false)
+  isActive    Boolean            @default(true)
+  sortOrder   Int                @default(0)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
   orderItems  OrderItem[]
   specGroups  ProductSpecGroup[]
 
@@ -88,13 +88,13 @@ model Product {
 }
 
 model SpecGroup {
-  id        Int       @id @default(autoincrement())
-  name      String    @unique
-  type      String    @default("SINGLE")
-  sortOrder Int       @default(0)
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id        Int                @id @default(autoincrement())
+  name      String             @unique
+  type      String             @default("SINGLE")
+  sortOrder Int                @default(0)
+  isActive  Boolean            @default(true)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
   options   SpecOption[]
   products  ProductSpecGroup[]
 }
@@ -126,12 +126,12 @@ model ProductSpecGroup {
 }
 
 model TableInfo {
-  id        Int       @id @default(autoincrement())
-  tableNo   String    @unique
+  id        Int      @id @default(autoincrement())
+  tableNo   String   @unique
   qrCodeUrl String?
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   orders    Order[]
 }
 
@@ -143,6 +143,9 @@ model User {
   phoneVerified   Boolean          @default(false)
   nickname        String?
   avatar          String?
+  status          String           @default("ACTIVE")
+  tokenVersion    Int              @default(0)
+  deletedAt       DateTime?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   orders          Order[]
@@ -164,12 +167,12 @@ model UserSubscribe {
 }
 
 model SmsCode {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   phone     String
   code      String
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([phone])
 }
@@ -201,15 +204,15 @@ model Order {
 }
 
 model OrderItem {
-  id          Int      @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   orderId     Int
-  order       Order    @relation(fields: [orderId], references: [id])
+  order       Order   @relation(fields: [orderId], references: [id])
   productId   Int
-  product     Product  @relation(fields: [productId], references: [id])
+  product     Product @relation(fields: [productId], references: [id])
   productName String
   specsDetail String
   unitPrice   Float
-  quantity    Int      @default(1)
+  quantity    Int     @default(1)
   subtotal    Float
 
   @@index([orderId])
@@ -219,7 +222,7 @@ model Payment {
   id            Int      @id @default(autoincrement())
   orderId       Int
   order         Order    @relation(fields: [orderId], references: [id])
-  transactionId String?
+  transactionId String?  @unique
   amount        Float
   status        String   @default("SUCCESS")
   channel       String   @default("MOCK")
@@ -227,16 +230,16 @@ model Payment {
 }
 
 model Refund {
-  id           Int      @id @default(autoincrement())
+  id           Int       @id @default(autoincrement())
   orderId      Int
-  order        Order    @relation(fields: [orderId], references: [id])
+  order        Order     @relation(fields: [orderId], references: [id])
   reason       String
-  status       String   @default("PENDING")
-  statusBefore String   @default("PAID")
+  status       String    @default("PENDING")
+  statusBefore String    @default("PAID")
   handledBy    Int?
-  admin        Admin?   @relation(fields: [handledBy], references: [id])
+  admin        Admin?    @relation(fields: [handledBy], references: [id])
   rejectReason String?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
   handledAt    DateTime?
 
   @@index([status])

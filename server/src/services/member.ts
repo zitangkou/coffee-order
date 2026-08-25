@@ -14,7 +14,7 @@ export async function memberProfile(userId: number) {
       },
     },
   });
-  if (!user) throw new Error("用户不存在");
+  if (!user || user.status !== "ACTIVE") throw new Error("用户不存在或已注销");
 
   const totalSpent =
     Math.round(user.orders.reduce((s, o) => s + Number(o.totalAmount), 0) * 100) / 100;

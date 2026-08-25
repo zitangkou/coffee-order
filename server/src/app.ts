@@ -8,6 +8,11 @@ import adminRouter from "./routes/admin.js";
 
 export function createApp() {
   const app = express();
+  const configuredProxyHops = Number(process.env.TRUST_PROXY_HOPS || (process.env.NODE_ENV === "production" ? 2 : 0));
+  if (!Number.isInteger(configuredProxyHops) || configuredProxyHops < 0 || configuredProxyHops > 10) {
+    throw new Error("TRUST_PROXY_HOPS 必须是 0-10 的整数");
+  }
+  if (configuredProxyHops > 0) app.set("trust proxy", configuredProxyHops);
   const allowedOrigins = (process.env.CORS_ORIGINS || process.env.WEB_BASE_URL || "")
     .split(",")
     .map((item) => item.trim())

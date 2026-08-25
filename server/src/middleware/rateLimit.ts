@@ -30,3 +30,26 @@ export function loginLimiter() {
     message: { code: 429, data: null, msg: "登录尝试次数过多，请 15 分钟后再试" },
   });
 }
+
+function scopedLimiter(windowMs: number, limit: number, message: string) {
+  if (disabled) return noop;
+  return rateLimit({
+    windowMs,
+    limit,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { code: 429, data: null, msg: message },
+  });
+}
+
+export function smsLimiter() {
+  return scopedLimiter(60 * 60_000, Number(process.env.SMS_RATE_LIMIT || 10), "验证码请求过于频繁，请稍后再试");
+}
+
+export function orderLimiter() {
+  return scopedLimiter(60_000, Number(process.env.ORDER_RATE_LIMIT || 30), "下单请求过于频繁，请稍后再试");
+}
+
+export function paymentLimiter() {
+  return scopedLimiter(60_000, Number(process.env.PAYMENT_RATE_LIMIT || 20), "支付请求过于频繁，请稍后再试");
+}

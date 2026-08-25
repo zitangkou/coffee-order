@@ -60,7 +60,7 @@
             @tap="openSpecSheet(p)"
           >
             <view class="p-img">
-              <image v-if="p.imageUrl" :src="p.imageUrl" mode="aspectFill" class="p-img-img" />
+              <image v-if="p.imageUrl" :src="assetUrl(p.imageUrl)" mode="aspectFill" class="p-img-img" />
               <text v-else class="p-img-text">{{ p.name.slice(0, 1) }}</text>
               <view v-if="p.isSoldOut" class="sold-out">售罄</view>
               <view class="badges">
@@ -128,6 +128,7 @@ import { api } from "../../api";
 import { useCartStore } from "../../stores/cart";
 import { useUserStore } from "../../stores/user";
 import { applyTableId } from "../../utils/table";
+import { assetUrl } from "../../utils/assets";
 import SpecSheet from "../../components/SpecSheet.vue";
 import type { Category, Product, Shop, Table } from "../../types";
 
@@ -258,7 +259,15 @@ function soldOutLast(list: Product[]) {
 onLoad(async (options) => {
   try {
     await user.ensureLogin();
-    await applyTableId((options as any)?.table_id);
+    const rawScene = String((options as any)?.scene || "");
+    const scene = rawScene ? decodeURIComponent(rawScene) : "";
+    if (scene.startsWith("table_")) {
+      await applyTableId(scene.slice("table_".length));
+    } else if (scene === "takeout") {
+      user.setOrderType("TAKEOUT");
+    } else {
+      await applyTableId((options as any)?.table_id);
+    }
     loadData();
   } catch (e: any) {
     uni.showToast({ title: `启动失败：${e.message || "未知错误"}`, icon: "none", duration: 5000 });
@@ -313,7 +322,7 @@ function onAddToCart(payload: {
   cart.add({
     productId: payload.product.id,
     name: payload.product.name,
-    image: payload.product.imageUrl,
+    image: assetUrl(payload.product.imageUrl),
     specs: payload.specs,
     unitPrice: payload.unitPrice,
     quantity: payload.quantity,

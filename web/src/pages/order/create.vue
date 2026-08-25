@@ -193,7 +193,7 @@ async function submit() {
 
 async function waitForPaid(orderId: number) {
   for (let i = 0; i < 12; i += 1) {
-    const current = await api.getOrder(orderId);
+    const current = await api.confirmPayment(orderId);
     if (current.status === "PAID") return current;
     if (["CANCELLED", "REFUNDED"].includes(current.status)) {
       throw new Error("订单状态已变化，请在订单列表查看");

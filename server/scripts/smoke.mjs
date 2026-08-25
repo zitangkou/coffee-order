@@ -47,6 +47,16 @@ function check(name, fn) {
     });
 }
 
+function defaultSpecs(product) {
+  const specs = {};
+  for (const group of product?.specGroups ?? []) {
+    if (!group.required) continue;
+    const option = group.options?.find((item) => item.isDefault) || group.options?.[0];
+    if (option) specs[group.name] = group.type === "MULTI" ? [option.label] : option.label;
+  }
+  return specs;
+}
+
 async function main() {
   console.log("[smoke] Coffee OS 后端冒烟测试");
 
@@ -58,7 +68,8 @@ async function main() {
   await check("菜单与商品", async () => {
     const cats = await call("/categories");
     if (!cats.length || !cats[0].products?.length) throw new Error("无分类或商品");
-    globalThis.firstProductId = cats[0].products[0].id;
+    globalThis.firstProduct = cats[0].products[0];
+    globalThis.firstProductId = globalThis.firstProduct.id;
   });
 
   await check("游客登录", async () => {
@@ -93,11 +104,35 @@ async function main() {
         tableId: 1,
         orderType: "DINE_IN",
         remark: "冒烟测试",
-        items: [{ productId: globalThis.firstProductId, quantity: 1, specs: {} }],
+        items: [{ productId: globalThis.firstProductId, quantity: 1, specs: defaultSpecs(globalThis.firstProduct) }],
       },
     });
     if (!order.id || !order.pickupNo) throw new Error("订单字段缺失");
     globalThis.orderId = order.id;
+  });
+
+  await check("下单参数与规格校验", async () => {
+    await expectRejected("/orders", {
+      method: "POST",
+      token: globalThis.userToken,
+      body: { orderType: "TAKEOUT", items: [] },
+    });
+    await expectRejected("/orders", {
+      method: "POST",
+      token: globalThis.userToken,
+      body: {
+        orderType: "DINE_IN",
+        items: [{ productId: globalThis.firstProductId, quantity: 1, specs: defaultSpecs(globalThis.firstProduct) }],
+      },
+    });
+    await expectRejected("/orders", {
+      method: "POST",
+      token: globalThis.userToken,
+      body: {
+        orderType: "TAKEOUT",
+        items: [{ productId: globalThis.firstProductId, quantity: 1, specs: { 非法规格: "非法选项" } }],
+      },
+    });
   });
 
   await check("订单接口拒绝匿名与跨用户访问", async () => {
@@ -137,7 +172,7 @@ async function main() {
       token: globalThis.userToken,
       body: {
         orderType: "TAKEOUT",
-        items: [{ productId: globalThis.firstProductId, quantity: 1, specs: {} }],
+        items: [{ productId: globalThis.firstProductId, quantity: 1, specs: defaultSpecs(globalThis.firstProduct) }],
       },
     });
     const mpRes = await fetch(`${BASE}/orders/${order.id}/pay`, {
@@ -151,6 +186,11 @@ async function main() {
     });
     const mpJson = await mpRes.json();
     if (mpJson.code === 0) throw new Error("未配置微信支付时 mp 应拒绝");
+    const pending = await call(`/orders/${order.id}/payment-status`, {
+      method: "POST",
+      token: globalThis.userToken,
+    });
+    if (pending.status !== "UNPAID") throw new Error("未配置支付时查单不应改变订单状态");
     const h5 = await call(`/orders/${order.id}/pay`, {
       method: "POST",
       token: globalThis.userToken,
@@ -386,6 +426,19 @@ async function main() {
       token: relogin.token,
       body: { oldPassword: "smoke1234", newPassword: "admin123" },
     });
+  });
+
+  await check("账号注销后旧令牌失效", async () => {
+    const guest = await call("/auth/guest", {
+      method: "POST",
+      body: { deviceId: `smoke-deactivate-${Date.now()}` },
+    });
+    await call("/user/deactivate", {
+      method: "POST",
+      token: guest.token,
+      body: { confirm: "确认注销" },
+    });
+    await expectRejected("/user/profile", { token: guest.token });
   });
 
   console.log("");

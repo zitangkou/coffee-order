@@ -5,3 +5,5 @@ server/dev.db
 server/uploads/
 server/.env
 *.log
+secrets/*
+!secrets/.gitkeep

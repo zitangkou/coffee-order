@@ -9,11 +9,41 @@ npm --prefix "$ROOT_DIR/web" run type-check
 echo "[release-check] 微信小程序构建"
 npm --prefix "$ROOT_DIR/web" run build:mp-weixin
 
+if [[ "${PRODUCTION_RELEASE:-false}" == "true" ]]; then
+  if [[ "${VITE_MP_API_BASE:-}" != https://* ]]; then
+    echo "[release-check] ✗ 正式小程序构建必须配置 HTTPS 的 VITE_MP_API_BASE"
+    exit 1
+  fi
+  if [[ "${VITE_MP_API_BASE}" == *example.com* ]]; then
+    echo "[release-check] ✗ VITE_MP_API_BASE 仍是示例域名"
+    exit 1
+  fi
+fi
+
 echo "[release-check] H5 构建"
 npm --prefix "$ROOT_DIR/web" run build:h5
 
 echo "[release-check] 后端构建与安全门禁"
 npm --prefix "$ROOT_DIR/server" run security
+
+echo "[release-check] 生产 MySQL schema 校验"
+DATABASE_URL="mysql://schema_check:schema_check@localhost:3306/schema_check" \
+  npm --prefix "$ROOT_DIR/server" exec -- prisma validate --schema "$ROOT_DIR/server/prisma/schema.mysql.prisma"
+
+if rg -q "pages_admin" "$ROOT_DIR/web/dist/build/mp-weixin"; then
+  echo "[release-check] ✗ 微信小程序产物不应包含商家后台"
+  exit 1
+fi
+
+if rg -q 'auth/guest|/admin/' "$ROOT_DIR/web/dist/build/mp-weixin"; then
+  echo "[release-check] ✗ 微信小程序产物不应包含游客登录或商家后台 API"
+  exit 1
+fi
+
+if rg -q 'db push|accept-data-loss' "$ROOT_DIR/Dockerfile.server"; then
+  echo "[release-check] ✗ 生产容器禁止使用 db push/accept-data-loss"
+  exit 1
+fi
 
 if [[ "${CHECK_SMOKE:-false}" == "true" ]]; then
   echo "[release-check] 后端冒烟测试"

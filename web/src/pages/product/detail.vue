@@ -1,7 +1,7 @@
 <template>
   <view class="page detail">
     <view class="img">
-      <image v-if="product?.imageUrl" :src="product.imageUrl" mode="aspectFill" class="img-main" />
+      <image v-if="product?.imageUrl" :src="assetUrl(product.imageUrl)" mode="aspectFill" class="img-main" />
       <text v-else class="img-text">{{ product?.name?.slice(0, 1) || "☕" }}</text>
       <view class="back" @tap="goBack">‹</view>
     </view>
@@ -70,6 +70,7 @@ import { onLoad } from "@dcloudio/uni-app";
 import { api } from "../../api";
 import { useCartStore } from "../../stores/cart";
 import type { Product, SpecGroup, SpecOption } from "../../types";
+import { assetUrl } from "../../utils/assets";
 
 const product = ref<Product | null>(null);
 const quantity = ref(1);
@@ -154,7 +155,7 @@ function addToCart() {
   cart.add({
     productId: product.value.id,
     name: product.value.name,
-    image: product.value.imageUrl,
+    image: assetUrl(product.value.imageUrl),
     specs,
     unitPrice: unitPrice.value,
     quantity: quantity.value,

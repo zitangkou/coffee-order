@@ -2,7 +2,7 @@
   <view v-if="show" class="mask" @tap="close">
     <view class="sheet" @tap.stop>
       <view class="head">
-        <image v-if="product?.imageUrl" :src="product.imageUrl" class="thumb" mode="aspectFill" />
+        <image v-if="product?.imageUrl" :src="assetUrl(product.imageUrl)" class="thumb" mode="aspectFill" />
         <view v-else class="thumb thumb-text">{{ product?.name?.slice(0, 1) }}</view>
         <view class="head-info">
           <view class="name">{{ product?.name }}</view>
@@ -59,6 +59,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { Product, SpecGroup, SpecOption } from "../types";
+import { assetUrl } from "../utils/assets";
 
 const props = defineProps<{
   show: boolean;

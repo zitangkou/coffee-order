@@ -35,6 +35,15 @@ const orderInclude = {
 } satisfies Prisma.OrderInclude;
 
 export async function createOrder(input: CreateOrderInput) {
+  if (!input.userId) throw new Error("请先登录");
+  if (!Array.isArray(input.items) || input.items.length === 0) throw new Error("订单至少需要一件商品");
+  if (input.items.length > 50) throw new Error("单笔订单商品种类过多");
+  for (const item of input.items) {
+    if (!Number.isInteger(item.productId) || item.productId <= 0) throw new Error("商品参数不正确");
+    if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 20) {
+      throw new Error("单项商品数量必须为 1–20");
+    }
+  }
   const productIds = input.items.map((i) => i.productId);
   const products = await prisma.product.findMany({
     where: { id: { in: productIds }, isActive: true, isSoldOut: false },
@@ -56,6 +65,13 @@ export async function createOrder(input: CreateOrderInput) {
   }
   const productMap = new Map(products.map((p) => [p.id, p]));
   const setting = await prisma.shopSetting.findFirst();
+  if (setting && !setting.acceptOrders) throw new Error("店铺当前暂停接单");
+  if (input.orderType === "DINE_IN" && setting && !setting.dineInEnabled) {
+    throw new Error("店铺当前未开放堂食");
+  }
+  if (input.orderType === "TAKEOUT" && setting && !setting.takeoutEnabled) {
+    throw new Error("店铺当前未开放外带");
+  }
   const packFee =
     input.orderType === "TAKEOUT" && setting ? Number(setting.packFee) : 0;
 
@@ -68,8 +84,21 @@ export async function createOrder(input: CreateOrderInput) {
       required: psg.required,
       options: psg.specGroup.options,
     }));
+    const allowedGroupNames = new Set(specGroups.map((group: any) => group.name));
+    for (const suppliedName of Object.keys(it.specs ?? {})) {
+      if (!allowedGroupNames.has(suppliedName)) throw new Error(`${product.name} 包含无效规格`);
+    }
+    for (const group of specGroups) {
+      const selected = it.specs?.[group.name];
+      const values = selected == null ? [] : Array.isArray(selected) ? selected : [selected];
+      if (group.required && values.length === 0) throw new Error(`${product.name} 请选择${group.name}`);
+      if (group.type === "SINGLE" && values.length > 1) throw new Error(`${group.name}只能选择一项`);
+      if (new Set(values).size !== values.length) throw new Error(`${group.name}包含重复选项`);
+      const allowed = new Set(group.options.map((option: any) => option.label));
+      if (values.some((value: string) => !allowed.has(value))) throw new Error(`${group.name}包含无效选项`);
+    }
     const unitPrice = calcUnitPrice({ price: Number(product.price), specGroups }, it.specs ?? {});
-    const quantity = Math.max(1, Math.min(99, it.quantity || 1));
+    const quantity = it.quantity;
     return {
       productId: product.id,
       productName: product.name,
@@ -83,6 +112,9 @@ export async function createOrder(input: CreateOrderInput) {
     Math.round((items.reduce((s, i) => s + i.subtotal, 0) + packFee) * 100) / 100;
 
   let tableId: number | null = input.tableId ?? null;
+  if (input.orderType === "DINE_IN" && !tableId) {
+    throw new Error("堂食订单请选择桌号");
+  }
   if (input.orderType === "DINE_IN" && tableId) {
     const table = await prisma.tableInfo.findFirst({
       where: { id: tableId, isActive: true },

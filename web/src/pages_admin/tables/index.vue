@@ -7,7 +7,7 @@
 
     <view class="card takeout-row">
       <view>
-        <view class="takeout-title">外带码</view>
+        <view class="takeout-title">外带小程序码</view>
         <view class="text-sub">吧台专用，扫码直接进入外带模式</view>
       </view>
       <view class="mini-btn" @tap="genTakeout">{{ takeoutQr ? "重新生成" : "生成" }}</view>
@@ -24,7 +24,7 @@
         </view>
         <view class="t-actions">
           <view class="mini-btn" @tap="toggle(t)">{{ t.isActive ? "停用" : "启用" }}</view>
-          <view class="mini-btn" @tap="qr(t)">生成桌码</view>
+          <view class="mini-btn" @tap="qr(t)">生成小程序码</view>
           <view v-if="t.qrCodeUrl" class="mini-btn" @tap="openQr(t)">查看</view>
           <view class="mini-btn danger" @tap="remove(t)">删除</view>
         </view>
@@ -80,9 +80,9 @@ async function toggle(t: Table) {
 async function qr(t: Table) {
   try {
     uni.showLoading({ title: "生成中" });
-    const data = await api.adminTableQrcode(t.id);
+    const data = await api.adminTableMiniProgramCode(t.id);
     uni.hideLoading();
-    uni.showToast({ title: "桌码已生成", icon: "success" });
+    uni.showToast({ title: "小程序码已生成", icon: "success" });
     load();
     setTimeout(() => openQr({ ...t, qrCodeUrl: data.qrUrl }), 600);
   } catch (e: any) {
@@ -108,10 +108,10 @@ function showImage(path: string) {
 async function genTakeout() {
   try {
     uni.showLoading({ title: "生成中" });
-    const data = await api.adminTakeoutQrcode();
+    const data = await api.adminTakeoutMiniProgramCode();
     uni.hideLoading();
     takeoutQr.value = data.qrUrl;
-    uni.showToast({ title: "外带码已生成", icon: "success" });
+    uni.showToast({ title: "外带小程序码已生成", icon: "success" });
     setTimeout(() => showImage(data.qrUrl), 600);
   } catch (e: any) {
     uni.hideLoading();

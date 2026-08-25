@@ -16,7 +16,7 @@ export const useUserStore = defineStore("user", {
     async ensureLogin() {
       if (this.token) return;
       try {
-        // 小程序端优先使用微信登录（未配置时后端明确报错，回退游客）
+        // 正式小程序只允许微信登录，不得降级为游客身份。
         // #ifdef MP-WEIXIN
         const code = await wxLoginCode();
         const wxData = await api.wxLogin(code);
@@ -27,8 +27,15 @@ export const useUserStore = defineStore("user", {
         return;
         // #endif
       } catch (e) {
-        console.warn("[user] 微信登录失败，回退游客登录", e);
+        // #ifdef MP-WEIXIN
+        console.error("[user] 微信登录失败", e);
+        throw e;
+        // #endif
+        // #ifndef MP-WEIXIN
+        console.warn("[user] 登录失败，尝试游客模式", e);
+        // #endif
       }
+      // #ifndef MP-WEIXIN
       try {
         let deviceId = uni.getStorageSync(STORAGE_KEYS.deviceId) as string;
         if (!deviceId) {
@@ -44,6 +51,7 @@ export const useUserStore = defineStore("user", {
         // 登录失败不阻塞浏览：游客可先看菜单，下单时再重试
         console.warn("[user] guest login failed, continue anonymous", e);
       }
+      // #endif
     },
     setTable(table: Table | null) {
       this.tableId = table?.id ?? null;
@@ -54,6 +62,13 @@ export const useUserStore = defineStore("user", {
     setOrderType(type: "DINE_IN" | "TAKEOUT") {
       this.orderType = type;
       uni.setStorageSync("order_type", type);
+    },
+    logout() {
+      this.userId = null;
+      this.token = "";
+      uni.removeStorageSync(STORAGE_KEYS.userId);
+      uni.removeStorageSync(STORAGE_KEYS.userToken);
+      uni.removeStorageSync(STORAGE_KEYS.deviceId);
     },
   },
 });

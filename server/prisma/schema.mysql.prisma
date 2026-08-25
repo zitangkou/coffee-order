@@ -178,6 +178,9 @@ model User {
   phoneVerified   Boolean          @default(false)
   nickname        String?          @db.VarChar(50)
   avatar          String?          @db.VarChar(500)
+  status          String           @default("ACTIVE") @db.VarChar(20)
+  tokenVersion    Int              @default(0)
+  deletedAt       DateTime?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   orders          Order[]
@@ -254,7 +257,7 @@ model Payment {
   id            Int             @id @default(autoincrement())
   orderId       Int
   order         Order           @relation(fields: [orderId], references: [id])
-  transactionId String?         @db.VarChar(64)
+  transactionId String?         @unique @db.VarChar(64)
   amount        Decimal         @db.Decimal(10, 2)
   status        String          @default("SUCCESS") @db.VarChar(20)
   channel       PaymentChannel  @default(MOCK)

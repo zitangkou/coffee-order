@@ -67,6 +67,12 @@ export async function handlePaymentCallback(
     return { code: "SUCCESS", message: "非支付成功事件" };
   }
 
+  await confirmWechatPayment(event);
+  return { code: "SUCCESS", message: "成功" };
+}
+
+export async function confirmWechatPayment(event: any): Promise<void> {
+  if (event.trade_state !== "SUCCESS") throw new Error("微信订单尚未支付成功");
   const orderNo = String(event.out_trade_no || "");
   const txId = String(event.transaction_id || "");
   const paidFen = Number(event.amount?.total || 0);
@@ -85,23 +91,35 @@ export async function handlePaymentCallback(
   const existing = order.payments.find(
     (p) => p.transactionId === txId && p.status === "SUCCESS"
   );
-  if (existing) return { code: "SUCCESS", message: "已处理" };
+  if (existing) return;
 
-  await prisma.$transaction([
-    prisma.payment.create({
-      data: {
-        orderId: order.id,
-        transactionId: txId,
-        amount: order.totalAmount,
-        channel: "WECHAT",
-        status: "SUCCESS",
-      },
-    }),
-    prisma.order.updateMany({
-      where: { id: order.id, status: "UNPAID" },
-      data: { status: "PAID", paidAt: new Date() },
-    }),
-  ]);
-
-  return { code: "SUCCESS", message: "成功" };
+  try {
+    await prisma.$transaction(async (tx) => {
+      const duplicate = await tx.payment.findFirst({ where: { transactionId: txId } });
+      if (duplicate) {
+        if (duplicate.orderId !== order.id) throw new Error("微信交易号已关联其他订单");
+        return;
+      }
+      const updated = await tx.order.updateMany({
+        where: { id: order.id, status: { in: ["UNPAID", "CANCELLED"] } },
+        data: { status: "PAID", paidAt: new Date() },
+      });
+      if (updated.count === 0 && !["PAID", "MAKING", "READY", "COMPLETED"].includes(order.status)) {
+        throw new Error(`订单状态 ${order.status} 不允许确认支付`);
+      }
+      await tx.payment.create({
+        data: {
+          orderId: order.id,
+          transactionId: txId,
+          amount: order.totalAmount,
+          channel: "WECHAT",
+          status: "SUCCESS",
+        },
+      });
+    });
+  } catch (error: any) {
+    // 并发重复回调可能同时越过读取，数据库唯一约束负责最终兜底。
+    if (error?.code === "P2002") return;
+    throw error;
+  }
 }

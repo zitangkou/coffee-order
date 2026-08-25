@@ -1,0 +1,164 @@
+-- Coffee OS MySQL production baseline matching the pre-migration production schema.
+-- Existing databases created by prisma db push must mark this migration as applied
+-- before the first `prisma migrate deploy`; see docs/部署指南.md.
+
+CREATE TABLE `Admin` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `username` VARCHAR(50) NOT NULL,
+  `passwordHash` VARCHAR(255) NOT NULL, `role` ENUM('STAFF', 'MANAGER') NOT NULL DEFAULT 'STAFF',
+  `status` VARCHAR(20) NOT NULL DEFAULT 'ACTIVE', `mustChangePassword` BOOLEAN NOT NULL DEFAULT false,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), `updatedAt` DATETIME(3) NOT NULL,
+  UNIQUE INDEX `Admin_username_key`(`username`), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `AuditLog` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `adminId` INTEGER NULL, `action` VARCHAR(50) NOT NULL,
+  `targetType` VARCHAR(50) NULL, `targetId` INTEGER NULL, `detail` TEXT NULL,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  INDEX `AuditLog_createdAt_idx`(`createdAt`), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `ShopSetting` (
+  `id` INTEGER NOT NULL DEFAULT 1, `name` VARCHAR(100) NOT NULL DEFAULT 'Coffee OS',
+  `slogan` VARCHAR(200) NULL, `logoUrl` VARCHAR(500) NULL, `announcement` VARCHAR(500) NULL,
+  `businessHours` VARCHAR(100) NULL, `acceptOrders` BOOLEAN NOT NULL DEFAULT true,
+  `dineInEnabled` BOOLEAN NOT NULL DEFAULT true, `takeoutEnabled` BOOLEAN NOT NULL DEFAULT true,
+  `packFee` DECIMAL(10, 2) NOT NULL DEFAULT 0, `refundEnabled` BOOLEAN NOT NULL DEFAULT true,
+  `takeoutPhoneRequired` BOOLEAN NOT NULL DEFAULT false, `printerConfig` JSON NULL,
+  `updatedAt` DATETIME(3) NOT NULL, PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `Category` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `name` VARCHAR(50) NOT NULL,
+  `sortOrder` INTEGER NOT NULL DEFAULT 0, `isActive` BOOLEAN NOT NULL DEFAULT true,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `Product` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `categoryId` INTEGER NOT NULL, `name` VARCHAR(100) NOT NULL,
+  `nameEn` VARCHAR(100) NULL, `description` TEXT NULL, `flavorNotes` VARCHAR(200) NULL,
+  `origin` VARCHAR(100) NULL, `roastLevel` VARCHAR(50) NULL, `imageUrl` VARCHAR(500) NULL,
+  `price` DECIMAL(10, 2) NOT NULL, `isSignature` BOOLEAN NOT NULL DEFAULT false,
+  `isHot` BOOLEAN NOT NULL DEFAULT false, `isSoldOut` BOOLEAN NOT NULL DEFAULT false,
+  `isActive` BOOLEAN NOT NULL DEFAULT true, `sortOrder` INTEGER NOT NULL DEFAULT 0,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), `updatedAt` DATETIME(3) NOT NULL,
+  INDEX `Product_categoryId_isActive_idx`(`categoryId`, `isActive`), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `SpecGroup` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `name` VARCHAR(50) NOT NULL,
+  `type` VARCHAR(20) NOT NULL DEFAULT 'SINGLE', `sortOrder` INTEGER NOT NULL DEFAULT 0,
+  `isActive` BOOLEAN NOT NULL DEFAULT true, `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` DATETIME(3) NOT NULL, UNIQUE INDEX `SpecGroup_name_key`(`name`), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `SpecOption` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `groupId` INTEGER NOT NULL, `label` VARCHAR(100) NOT NULL,
+  `extraPrice` DECIMAL(10, 2) NOT NULL DEFAULT 0, `isDefault` BOOLEAN NOT NULL DEFAULT false,
+  `sortOrder` INTEGER NOT NULL DEFAULT 0, `isActive` BOOLEAN NOT NULL DEFAULT true,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  INDEX `SpecOption_groupId_idx`(`groupId`), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `ProductSpecGroup` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `productId` INTEGER NOT NULL, `specGroupId` INTEGER NOT NULL,
+  `required` BOOLEAN NOT NULL DEFAULT true, `sortOrder` INTEGER NOT NULL DEFAULT 0,
+  UNIQUE INDEX `ProductSpecGroup_productId_specGroupId_key`(`productId`, `specGroupId`), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `TableInfo` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `tableNo` VARCHAR(20) NOT NULL, `qrCodeUrl` VARCHAR(500) NULL,
+  `isActive` BOOLEAN NOT NULL DEFAULT true, `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` DATETIME(3) NOT NULL, UNIQUE INDEX `TableInfo_tableNo_key`(`tableNo`), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `User` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `openid` VARCHAR(64) NULL, `wxOpenid` VARCHAR(64) NULL,
+  `phone` VARCHAR(20) NULL, `phoneVerified` BOOLEAN NOT NULL DEFAULT false, `nickname` VARCHAR(50) NULL,
+  `avatar` VARCHAR(500) NULL,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), `updatedAt` DATETIME(3) NOT NULL,
+  UNIQUE INDEX `User_openid_key`(`openid`), UNIQUE INDEX `User_wxOpenid_key`(`wxOpenid`), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `UserSubscribe` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `userId` INTEGER NOT NULL, `templateId` VARCHAR(100) NOT NULL,
+  `status` VARCHAR(20) NOT NULL DEFAULT 'ACCEPTED', `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE INDEX `UserSubscribe_userId_templateId_key`(`userId`, `templateId`), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `SmsCode` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `phone` VARCHAR(20) NOT NULL, `code` VARCHAR(10) NOT NULL,
+  `expiresAt` DATETIME(3) NOT NULL, `usedAt` DATETIME(3) NULL,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  INDEX `SmsCode_phone_idx`(`phone`), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `Order` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `orderNo` VARCHAR(32) NOT NULL, `pickupNo` VARCHAR(10) NOT NULL,
+  `userId` INTEGER NULL, `tableId` INTEGER NULL,
+  `orderType` ENUM('DINE_IN', 'TAKEOUT') NOT NULL DEFAULT 'DINE_IN',
+  `status` ENUM('UNPAID', 'PAID', 'MAKING', 'READY', 'COMPLETED', 'REFUNDING', 'REFUNDED', 'CANCELLED') NOT NULL DEFAULT 'UNPAID',
+  `totalAmount` DECIMAL(10, 2) NOT NULL, `packFee` DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  `remark` VARCHAR(255) NULL, `phone` VARCHAR(20) NULL,
+  `payType` ENUM('WECHAT', 'BALANCE') NOT NULL DEFAULT 'WECHAT', `paidAt` DATETIME(3) NULL,
+  `refundedAt` DATETIME(3) NULL, `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` DATETIME(3) NOT NULL, UNIQUE INDEX `Order_orderNo_key`(`orderNo`),
+  INDEX `Order_status_createdAt_idx`(`status`, `createdAt`), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `OrderItem` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `orderId` INTEGER NOT NULL, `productId` INTEGER NOT NULL,
+  `productName` VARCHAR(100) NOT NULL, `specsDetail` JSON NOT NULL,
+  `unitPrice` DECIMAL(10, 2) NOT NULL, `quantity` INTEGER NOT NULL DEFAULT 1,
+  `subtotal` DECIMAL(10, 2) NOT NULL, INDEX `OrderItem_orderId_idx`(`orderId`), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `Payment` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `orderId` INTEGER NOT NULL, `transactionId` VARCHAR(64) NULL,
+  `amount` DECIMAL(10, 2) NOT NULL, `status` VARCHAR(20) NOT NULL DEFAULT 'SUCCESS',
+  `channel` ENUM('WECHAT', 'MOCK', 'BALANCE') NOT NULL DEFAULT 'MOCK',
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `Refund` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `orderId` INTEGER NOT NULL, `reason` VARCHAR(255) NOT NULL,
+  `status` ENUM('PENDING', 'APPROVED', 'REJECTED') NOT NULL DEFAULT 'PENDING',
+  `statusBefore` ENUM('UNPAID', 'PAID', 'MAKING', 'READY', 'COMPLETED', 'REFUNDING', 'REFUNDED', 'CANCELLED') NOT NULL DEFAULT 'PAID',
+  `handledBy` INTEGER NULL, `rejectReason` VARCHAR(255) NULL,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), `handledAt` DATETIME(3) NULL,
+  INDEX `Refund_status_idx`(`status`), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `MemberAccount` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `userId` INTEGER NOT NULL,
+  `balance` DECIMAL(10, 2) NOT NULL DEFAULT 0, `updatedAt` DATETIME(3) NOT NULL,
+  UNIQUE INDEX `MemberAccount_userId_key`(`userId`), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `WalletLog` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `userId` INTEGER NOT NULL, `type` VARCHAR(20) NOT NULL,
+  `amount` DECIMAL(10, 2) NOT NULL, `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `RechargeRecord` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT, `userId` INTEGER NOT NULL,
+  `payAmount` DECIMAL(10, 2) NOT NULL, `giveAmount` DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  `status` VARCHAR(20) NOT NULL DEFAULT 'SUCCESS',
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+ALTER TABLE `AuditLog` ADD CONSTRAINT `AuditLog_adminId_fkey` FOREIGN KEY (`adminId`) REFERENCES `Admin`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Product` ADD CONSTRAINT `Product_categoryId_fkey` FOREIGN KEY (`categoryId`) REFERENCES `Category`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `SpecOption` ADD CONSTRAINT `SpecOption_groupId_fkey` FOREIGN KEY (`groupId`) REFERENCES `SpecGroup`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `ProductSpecGroup` ADD CONSTRAINT `ProductSpecGroup_productId_fkey` FOREIGN KEY (`productId`) REFERENCES `Product`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `ProductSpecGroup` ADD CONSTRAINT `ProductSpecGroup_specGroupId_fkey` FOREIGN KEY (`specGroupId`) REFERENCES `SpecGroup`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `UserSubscribe` ADD CONSTRAINT `UserSubscribe_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Order` ADD CONSTRAINT `Order_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Order` ADD CONSTRAINT `Order_tableId_fkey` FOREIGN KEY (`tableId`) REFERENCES `TableInfo`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `OrderItem` ADD CONSTRAINT `OrderItem_orderId_fkey` FOREIGN KEY (`orderId`) REFERENCES `Order`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `OrderItem` ADD CONSTRAINT `OrderItem_productId_fkey` FOREIGN KEY (`productId`) REFERENCES `Product`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Payment` ADD CONSTRAINT `Payment_orderId_fkey` FOREIGN KEY (`orderId`) REFERENCES `Order`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Refund` ADD CONSTRAINT `Refund_orderId_fkey` FOREIGN KEY (`orderId`) REFERENCES `Order`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Refund` ADD CONSTRAINT `Refund_handledBy_fkey` FOREIGN KEY (`handledBy`) REFERENCES `Admin`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `MemberAccount` ADD CONSTRAINT `MemberAccount_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `WalletLog` ADD CONSTRAINT `WalletLog_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `RechargeRecord` ADD CONSTRAINT `RechargeRecord_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;

@@ -7,12 +7,14 @@ export const api = {
   getProduct: (id: number) => request<Product>({ url: `/products/${id}` }),
   getTables: () => request<Table[]>({ url: "/tables" }),
   getShop: () => request<Shop>({ url: "/shop" }),
+  // #ifndef MP-WEIXIN
   guestLogin: (deviceId: string) =>
     request<{ userId: number; token: string }>({
       url: "/auth/guest",
       method: "POST",
       data: { deviceId },
     }),
+  // #endif
   wxLogin: (code: string) =>
     request<{ userId: number; token: string; user: any }>({
       url: "/auth/wx-login",
@@ -28,6 +30,8 @@ export const api = {
   bindPhone: (phone: string, code: string) =>
     request<any>({ url: "/user/phone", method: "POST", data: { phone, code } }),
   userProfile: () => request<any>({ url: "/user/profile" }),
+  deactivateUser: () =>
+    request<any>({ url: "/user/deactivate", method: "POST", data: { confirm: "确认注销" } }),
   createOrder: (data: {
     tableId?: number;
     orderType: "DINE_IN" | "TAKEOUT";
@@ -38,6 +42,8 @@ export const api = {
   mockPay: (id: number) => request<Order>({ url: `/orders/${id}/mock-pay`, method: "POST" }),
   payOrder: (id: number) =>
     request<any>({ url: `/orders/${id}/pay`, method: "POST" }),
+  confirmPayment: (id: number) =>
+    request<Order>({ url: `/orders/${id}/payment-status`, method: "POST" }),
   saveSubscribe: (templateId: string) =>
     request<any>({ url: "/user/subscribe", method: "POST", data: { templateId } }),
   myOrders: () => request<Order[]>({ url: "/orders/my" }),
@@ -45,7 +51,8 @@ export const api = {
   requestRefund: (id: number, reason: string) =>
     request<Order>({ url: `/orders/${id}/refund`, method: "POST", data: { reason } }),
 
-  // 商家端
+  // 商家端只进入内部 Web 后台构建，不进入顾客小程序包。
+  // #ifndef MP-WEIXIN
   adminLogin: (username: string, password: string) =>
     request<{
       token: string;
@@ -124,6 +131,12 @@ export const api = {
       method: "POST",
       admin: true,
     }),
+  adminTableMiniProgramCode: (id: number) =>
+    request<{ qrUrl: string; scene: string; tableNo: string }>({
+      url: `/admin/tables/${id}/miniprogram-code`,
+      method: "POST",
+      admin: true,
+    }),
   adminSettings: () => request<any>({ url: "/admin/settings", admin: true }),
   adminSaveSettings: (data: Record<string, unknown>) =>
     request<any>({ url: "/admin/settings", method: "PUT", data, admin: true }),
@@ -141,6 +154,12 @@ export const api = {
       method: "POST",
       admin: true,
     }),
+  adminTakeoutMiniProgramCode: () =>
+    request<{ qrUrl: string; scene: string }>({
+      url: "/admin/takeout-miniprogram-code",
+      method: "POST",
+      admin: true,
+    }),
   adminAdmins: () =>
     request<any[]>({ url: "/admin/admins", admin: true }),
   adminCreateAdmin: (username: string, password: string, role: string) =>
@@ -149,4 +168,5 @@ export const api = {
     request<any>({ url: `/admin/admins/${id}`, method: "PUT", data, admin: true }),
   adminAuditLogs: () =>
     request<any[]>({ url: "/admin/audit-logs?limit=50", admin: true }),
+  // #endif
 };

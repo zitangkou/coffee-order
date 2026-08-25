@@ -4,12 +4,13 @@ import { num, str } from "../lib/validate.js";
 import { fail, ok } from "../lib/response.js";
 import { signUser } from "../lib/jwt.js";
 import { serializeOrder, serializeProduct } from "../lib/json.js";
-import { optionalUser, requireUser } from "../middleware/auth.js";
+import { requireUser } from "../middleware/auth.js";
 import { createOrder, mockPay, requestRefund, wechatPay } from "../services/order.js";
-import { handlePaymentCallback } from "../services/payment.js";
+import { confirmWechatPayment, handlePaymentCallback } from "../services/payment.js";
 import { memberProfile } from "../services/member.js";
 import { isConsoleSms, sendSmsCode } from "../services/sms.js";
-import { createJsapiPayment, jscode2session, wxMpConfigured, wxPayConfigured } from "../services/wechat.js";
+import { createJsapiPayment, jscode2session, queryJsapiPayment, wxMpConfigured, wxPayConfigured } from "../services/wechat.js";
+import { orderLimiter, paymentLimiter, smsLimiter } from "../middleware/rateLimit.js";
 
 const router = Router();
 
@@ -82,13 +83,13 @@ router.get("/shop", async (_req, res) => {
 router.post("/auth/guest", async (req, res) => {
   const deviceId = str(req.body?.deviceId, "").trim();
   if (!deviceId) return fail(res, "缺少设备标识");
-  const existing = await prisma.user.findFirst({ where: { openid: `guest:${deviceId}` } });
+  const existing = await prisma.user.findFirst({ where: { openid: `guest:${deviceId}`, status: "ACTIVE" } });
   const user =
     existing ??
     (await prisma.user.create({
       data: { openid: `guest:${deviceId}`, nickname: "咖啡客人" },
     }));
-  ok(res, { userId: user.id, token: signUser(user.id) });
+  ok(res, { userId: user.id, token: signUser(user.id, user.tokenVersion) });
 });
 
 // 微信小程序登录：code 换取 openid 并建立/绑定用户
@@ -98,7 +99,7 @@ router.post("/auth/wx-login", async (req, res) => {
   if (!wxMpConfigured()) return fail(res, "微信小程序登录未配置（WECHAT_MP_APPID/SECRET）");
   try {
     const session = await jscode2session(code);
-    let user = await prisma.user.findUnique({ where: { wxOpenid: session.openid } });
+    let user = await prisma.user.findFirst({ where: { wxOpenid: session.openid, status: "ACTIVE" } });
     if (!user) {
       user = await prisma.user.create({
         data: { wxOpenid: session.openid, nickname: "微信用户" },
@@ -106,7 +107,7 @@ router.post("/auth/wx-login", async (req, res) => {
     }
     ok(res, {
       userId: user.id,
-      token: signUser(user.id),
+      token: signUser(user.id, user.tokenVersion),
       user: { id: user.id, phone: user.phone, phoneVerified: user.phoneVerified },
     });
   } catch (e: any) {
@@ -114,7 +115,7 @@ router.post("/auth/wx-login", async (req, res) => {
   }
 });
 
-router.post("/auth/send-code", async (req, res) => {
+router.post("/auth/send-code", smsLimiter(), async (req, res) => {
   const phone = str(req.body?.phone, "").trim();
   if (!/^1[3-9]\d{9}$/.test(phone)) return fail(res, "手机号格式不正确");
   const last = await prisma.smsCode.findFirst({
@@ -175,7 +176,39 @@ router.get("/user/profile", requireUser, async (req, res) => {
   ok(res, await memberProfile(userId));
 });
 
-router.post("/orders", requireUser, async (req, res) => {
+router.post("/user/deactivate", requireUser, async (req, res) => {
+  const userId = (req as any).userId as number;
+  const phrase = str(req.body?.confirm).trim();
+  if (phrase !== "确认注销") return fail(res, "请输入“确认注销”完成确认");
+  const [openOrders, member] = await Promise.all([
+    prisma.order.count({
+      where: { userId, status: { in: ["UNPAID", "PAID", "MAKING", "READY", "REFUNDING"] } },
+    }),
+    prisma.memberAccount.findUnique({ where: { userId } }),
+  ]);
+  if (openOrders > 0) return fail(res, "存在进行中订单或退款，请处理完成后再注销");
+  if (member && Number(member.balance) !== 0) return fail(res, "账户仍有余额，请先联系客服处理");
+  await prisma.$transaction([
+    prisma.userSubscribe.deleteMany({ where: { userId } }),
+    prisma.user.update({
+      where: { id: userId },
+      data: {
+        openid: null,
+        wxOpenid: null,
+        phone: null,
+        phoneVerified: false,
+        nickname: "已注销用户",
+        avatar: null,
+        status: "DELETED",
+        tokenVersion: { increment: 1 },
+        deletedAt: new Date(),
+      },
+    }),
+  ]);
+  ok(res, null, "账号已注销");
+});
+
+router.post("/orders", orderLimiter(), requireUser, async (req, res) => {
   const body = req.body ?? {};
   const userId = (req as any).userId;
   try {
@@ -193,7 +226,7 @@ router.post("/orders", requireUser, async (req, res) => {
   }
 });
 
-router.post("/orders/:id/mock-pay", requireUser, async (req, res) => {
+router.post("/orders/:id/mock-pay", paymentLimiter(), requireUser, async (req, res) => {
   try {
     const order = await mockPay(num(req.params.id), (req as any).userId);
     ok(res, serializeOrder(order), "支付成功");
@@ -202,7 +235,7 @@ router.post("/orders/:id/mock-pay", requireUser, async (req, res) => {
   }
 });
 
-router.post("/orders/:id/pay", requireUser, async (req, res) => {
+router.post("/orders/:id/pay", paymentLimiter(), requireUser, async (req, res) => {
   try {
     const platform = str(req.headers["x-platform"] || "");
     if (platform === "mp-weixin") {
@@ -224,6 +257,28 @@ router.post("/orders/:id/pay", requireUser, async (req, res) => {
     ok(res, serializeOrder(order), "支付成功");
   } catch (e: any) {
     fail(res, e?.message || "支付失败");
+  }
+});
+
+router.post("/orders/:id/payment-status", paymentLimiter(), requireUser, async (req, res) => {
+  try {
+    const order = await prisma.order.findUnique({ where: { id: num(req.params.id) } });
+    if (!order) return fail(res, "订单不存在");
+    if (!order.userId || order.userId !== (req as any).userId) return fail(res, "无权操作该订单", 403, 403);
+    if (["PAID", "MAKING", "READY", "COMPLETED"].includes(order.status)) {
+      return ok(res, serializeOrder(order));
+    }
+    if (order.status !== "UNPAID" && order.status !== "CANCELLED") return ok(res, serializeOrder(order));
+    if (!wxPayConfigured()) return ok(res, serializeOrder(order));
+    const event = await queryJsapiPayment(order.orderNo);
+    if (event.trade_state === "SUCCESS") await confirmWechatPayment(event);
+    const latest = await prisma.order.findUnique({
+      where: { id: order.id },
+      include: { items: true, table: true, payments: true, refunds: true },
+    });
+    ok(res, serializeOrder(latest));
+  } catch (e: any) {
+    fail(res, e?.message || "支付状态查询失败");
   }
 });
 

@@ -5,6 +5,10 @@
 //    导致手机端请求打到手机自己（request:fail）。
 // 2. uni-app H5 的 request 在部分手机浏览器不支持相对路径，故 H5 平台补全为绝对地址。
 export const API_BASE: string = (() => {
+  // #ifdef MP-WEIXIN
+  const mpBase: string = import.meta.env.VITE_MP_API_BASE || "";
+  if (mpBase) return mpBase.replace(/\/$/, "");
+  // #endif
   const base: string = import.meta.env.VITE_API_BASE || "/api";
   // #ifdef H5
   // 兜底：任何情况都不允许请求打到 localhost（手机上等于请求手机自己）
@@ -13,6 +17,13 @@ export const API_BASE: string = (() => {
   }
   // #endif
   return base;
+})();
+
+export const ASSET_BASE: string = (() => {
+  const configured: string = import.meta.env.VITE_ASSET_BASE || "";
+  if (configured) return configured.replace(/\/$/, "");
+  if (/^https?:\/\//.test(API_BASE)) return API_BASE.replace(/\/api\/?$/, "");
+  return "";
 })();
 
 export const STORAGE_KEYS = {

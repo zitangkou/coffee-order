@@ -1,6 +1,6 @@
 # Coffee OS · 精品咖啡店扫码点单系统
 
-单店精品咖啡店的轻量数字化经营系统：**H5 先行，微信小程序无缝迁移**（uni-app 一套代码双端编译）。
+单店精品咖啡店的轻量数字化经营系统：**微信小程序顾客端优先发布，商家 Web 后台保留**；顾客端 H5 暂缓。
 
 ## 技术栈
 
@@ -91,7 +91,7 @@ cp deploy/.env.example .env      # 按需修改密码、WEB_BASE_URL、端口等
 
 **说明**
 
-- 部署脚本自动建表、写入种子数据、做健康检查，失败会直接报错。
+- 部署脚本应用版本化数据库迁移并做健康检查；全新环境通过 `INITIALIZE_SEED=true` 显式写入初始数据。
 - 腾讯云服务器若拉镜像慢，在 `.env` 里加 `DOCKER_MIRROR=mirror.ccs.tencentyun.com` 再执行 `./deploy.sh`。
 - 桌码地址由 `WEB_BASE_URL` 控制，部署后先在商家后台「桌台管理」重新生成桌码再打印。
 - 常用运维：`docker compose logs -f server`、`docker compose restart`、`git pull && docker compose up -d --build`。

@@ -28,5 +28,5 @@ COPY server/src ./src
 
 EXPOSE 3000
 
-# 启动前：旧库自动迁移规格数据（无旧字段则跳过）→ 建表 → 种子数据（幂等）→ 启动服务
-CMD ["sh", "-c", "node --import tsx prisma/dump-specs.ts || true && npx prisma db push --accept-data-loss && node --import tsx prisma/migrate-specs.ts || true && npm run seed && node --import tsx src/index.ts"]
+# 生产启动只应用已提交的版本化迁移；种子数据由部署脚本显式初始化。
+CMD ["sh", "-c", "npx prisma migrate deploy && node --import tsx src/index.ts"]

@@ -64,6 +64,7 @@
       <text class="dot">·</text>
       <text @tap="goLegal('terms')">用户服务协议</text>
     </view>
+    <view class="deactivate" @tap="deactivate">注销账号</view>
 
     <view v-if="!profile" class="empty">加载中...</view>
   </view>
@@ -177,6 +178,40 @@ function goOrder(id: number) {
 function goLegal(page: "privacy" | "terms") {
   uni.navigateTo({ url: `/pages/legal/${page}` });
 }
+
+async function deactivate() {
+  const first = await new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: "注销账号",
+      content: "注销后手机号、微信标识和订阅授权将被清除，历史交易记录会按经营与合规要求保留。存在进行中订单时不能注销。",
+      confirmText: "继续注销",
+      confirmColor: "#b5483d",
+      success: (result) => resolve(!!result.confirm),
+    });
+  });
+  if (!first) return;
+  const confirmed = await new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: "再次确认",
+      content: "确定永久注销当前账号？此操作不可恢复。",
+      confirmText: "确认注销",
+      confirmColor: "#b5483d",
+      success: (result) => resolve(!!result.confirm),
+    });
+  });
+  if (!confirmed) return;
+  try {
+    uni.showLoading({ title: "注销中" });
+    await api.deactivateUser();
+    user.logout();
+    uni.hideLoading();
+    uni.showToast({ title: "账号已注销", icon: "success" });
+    setTimeout(() => uni.reLaunch({ url: "/pages/index/index" }), 700);
+  } catch (e: any) {
+    uni.hideLoading();
+    uni.showToast({ title: e.message || "注销失败", icon: "none" });
+  }
+}
 </script>
 
 <style lang="scss" scoped>
@@ -198,6 +233,14 @@ function goLegal(page: "privacy" | "terms") {
 
 .dot {
   color: #b7aaa0;
+}
+
+.deactivate {
+  width: fit-content;
+  margin: -12rpx auto 32rpx;
+  padding: 12rpx 20rpx;
+  color: #a04a43;
+  font-size: 24rpx;
 }
 
 .avatar {

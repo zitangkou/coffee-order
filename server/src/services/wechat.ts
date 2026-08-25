@@ -104,6 +104,21 @@ export async function createJsapiPayment(
   };
 }
 
+export async function queryJsapiPayment(orderNo: string): Promise<any> {
+  if (!wxPayConfigured()) throw new Error("微信支付未配置");
+  const path = `/v3/pay/transactions/out-trade-no/${encodeURIComponent(orderNo)}?mchid=${encodeURIComponent(MCH_ID)}`;
+  const res = await fetch(`https://api.mch.weixin.qq.com${path}`, {
+    method: "GET",
+    headers: {
+      Authorization: authHeader("GET", path, ""),
+      Accept: "application/json",
+    },
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(`微信查单失败：${json.message || json.code || "未知错误"}`);
+  return json;
+}
+
 // 微信 access_token（缓存 100 分钟）
 let tokenCache: { token: string; expiresAt: number } | null = null;
 
@@ -120,6 +135,29 @@ export async function getAccessToken(): Promise<string> {
     expiresAt: Date.now() + (json.expires_in || 7200) * 1000 - 5 * 60_000,
   };
   return tokenCache.token;
+}
+
+export async function createUnlimitedMiniProgramCode(
+  scene: string,
+  page = "pages/index/index"
+): Promise<Buffer> {
+  if (!wxMpConfigured()) throw new Error("微信小程序未配置");
+  if (!scene || Buffer.byteLength(scene, "utf8") > 32) throw new Error("小程序码场景值无效");
+  const token = await getAccessToken();
+  const res = await fetch(
+    `https://api.weixin.qq.com/wxa/getwxacodeunlimit?access_token=${token}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scene, page, check_path: true, env_version: "release", width: 600 }),
+    }
+  );
+  const contentType = res.headers.get("content-type") || "";
+  if (!res.ok || contentType.includes("application/json")) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(`生成小程序码失败：${json.errmsg || json.errcode || res.status}`);
+  }
+  return Buffer.from(await res.arrayBuffer());
 }
 
 // 发送订阅消息
@@ -161,13 +199,27 @@ export async function sendOrderReadyNotify(order: { id: number; userId: number |
     where: { userId_templateId: { userId: order.userId, templateId: READY_TEMPLATE_ID } },
   });
   if (!sub || sub.status !== "ACCEPTED") return;
-  await sendSubscribeMessage(
-    user.wxOpenid,
-    READY_TEMPLATE_ID,
-    {
-      thing1: { value: `取餐码 ${order.pickupNo}` },
-      thing2: { value: "您的咖啡已做好，请到吧台取餐" },
-    },
-    `pages/order/detail?id=${order.id}`
-  );
+  const claimed = await prisma.userSubscribe.updateMany({
+    where: { id: sub.id, status: "ACCEPTED" },
+    data: { status: "SENDING" },
+  });
+  if (claimed.count !== 1) return;
+  try {
+    await sendSubscribeMessage(
+      user.wxOpenid,
+      READY_TEMPLATE_ID,
+      {
+        thing1: { value: `取餐码 ${order.pickupNo}` },
+        thing2: { value: "您的咖啡已做好，请到吧台取餐" },
+      },
+      `pages/order/detail?id=${order.id}`
+    );
+    await prisma.userSubscribe.update({ where: { id: sub.id }, data: { status: "SENT" } });
+  } catch (error) {
+    await prisma.userSubscribe.updateMany({
+      where: { id: sub.id, status: "SENDING" },
+      data: { status: "ACCEPTED" },
+    });
+    throw error;
+  }
 }

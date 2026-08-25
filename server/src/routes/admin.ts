@@ -13,6 +13,7 @@ import { requireAdmin, requireManager } from "../middleware/auth.js";
 import { loginLimiter } from "../middleware/rateLimit.js";
 import { logAudit } from "../lib/audit.js";
 import { handleRefund, transitionOrder } from "../services/order.js";
+import { createUnlimitedMiniProgramCode } from "../services/wechat.js";
 import {
   hourlyDistribution,
   productRanking,
@@ -506,6 +507,28 @@ router.post("/tables/:id/qrcode", requireAdmin, async (req, res) => {
   const qrUrl = `/uploads/qr/table-${table.id}.png`;
   await prisma.tableInfo.update({ where: { id: table.id }, data: { qrCodeUrl: qrUrl } });
   ok(res, { qrUrl, url, tableNo: table.tableNo }, "二维码已生成");
+});
+
+router.post("/tables/:id/miniprogram-code", requireAdmin, async (req, res) => {
+  const table = await prisma.tableInfo.findUnique({ where: { id: num(req.params.id) } });
+  if (!table) return fail(res, "桌台不存在");
+  const image = await createUnlimitedMiniProgramCode(`table_${table.id}`);
+  const dir = path.resolve(process.cwd(), "uploads/miniprogram-codes");
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `table-${table.id}.png`);
+  fs.writeFileSync(file, image);
+  const qrUrl = `/uploads/miniprogram-codes/table-${table.id}.png`;
+  await prisma.tableInfo.update({ where: { id: table.id }, data: { qrCodeUrl: qrUrl } });
+  ok(res, { qrUrl, scene: `table_${table.id}`, tableNo: table.tableNo }, "小程序桌码已生成");
+});
+
+router.post("/takeout-miniprogram-code", requireAdmin, async (_req, res) => {
+  const image = await createUnlimitedMiniProgramCode("takeout");
+  const dir = path.resolve(process.cwd(), "uploads/miniprogram-codes");
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, "takeout.png");
+  fs.writeFileSync(file, image);
+  ok(res, { qrUrl: "/uploads/miniprogram-codes/takeout.png", scene: "takeout" }, "外带小程序码已生成");
 });
 
 router.get("/settings", requireAdmin, requireManager, async (_req, res) => {
