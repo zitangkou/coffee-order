@@ -17,6 +17,7 @@ compose_env_value() {
 BASELINE_EXISTING_DB_VALUE="${BASELINE_EXISTING_DB:-$(compose_env_value BASELINE_EXISTING_DB)}"
 INITIALIZE_SEED_VALUE="${INITIALIZE_SEED:-$(compose_env_value INITIALIZE_SEED)}"
 HTTP_PORT_VALUE="${HTTP_PORT:-$(compose_env_value HTTP_PORT)}"
+RUN_SERVER_SECURITY_CHECK_VALUE="${RUN_SERVER_SECURITY_CHECK:-$(compose_env_value RUN_SERVER_SECURITY_CHECK)}"
 
 echo "=========================================="
 echo " Coffee OS 部署（方案B：内网端口 + 网关转发）"
@@ -53,11 +54,15 @@ echo "[5/5] 验证 API（本机内网）"
 PORT="${HTTP_PORT_VALUE:-8080}"
 curl -fsS "http://127.0.0.1:${PORT}/api/health" && echo
 
+if [ "${RUN_SERVER_SECURITY_CHECK_VALUE:-false}" = "true" ]; then
+  bash deploy/security-check.sh
+fi
+
 echo ""
 echo "部署完成！"
 echo "  本机内网入口: http://127.0.0.1:${PORT}"
 echo "  对外访问:     由宿主机 Nginx 网关按域名转发（见 docs/多项目部署指南.md）"
-echo "  商家后台:     http://<域名>/#/pages_admin/login/index  admin / admin123"
+echo "  商家后台:     https://nagacoffee.site/#/pages_admin/login/index（首次登录后立即修改初始密码）"
 echo ""
 echo "常用命令："
 echo "  查看日志: docker compose logs -f server"

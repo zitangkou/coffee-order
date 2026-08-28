@@ -4,26 +4,29 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# 读取项目 .env（避免密码写死在脚本里）
-if [ -f .env ]; then
-  set -a
-  # shellcheck disable=SC1091
-  . ./.env
-  set +a
-fi
+compose_env_value() {
+  docker compose config --environment | awk -F= -v key="$1" '$1 == key { sub(/^[^=]*=/, ""); print; exit }'
+}
 
+BACKUP_DIR="${BACKUP_DIR:-$(compose_env_value BACKUP_DIR)}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/backups}"
-RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
+RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-$(compose_env_value BACKUP_RETENTION_DAYS)}"
+RETENTION_DAYS="${RETENTION_DAYS:-14}"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 FILE="$BACKUP_DIR/coffee_os_$STAMP.sql.gz"
 
+umask 077
 mkdir -p "$BACKUP_DIR"
 
 docker compose exec -T mysql \
-  mysqldump -ucoffee -p"${MYSQL_PASSWORD:-coffee123}" --single-transaction coffee_os \
+  sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysqldump -ucoffee --single-transaction --quick --routines --triggers coffee_os' \
   | gzip > "$FILE"
+
+gzip -t "$FILE"
+sha256sum "$FILE" > "$FILE.sha256"
 
 # 清理超过保留天数的旧备份
 find "$BACKUP_DIR" -name "coffee_os_*.sql.gz" -mtime +"$RETENTION_DAYS" -delete
+find "$BACKUP_DIR" -name "coffee_os_*.sql.gz.sha256" -mtime +"$RETENTION_DAYS" -delete
 
-echo "[backup] 完成: $FILE"
+echo "[backup] 完成并校验压缩完整性: $FILE"

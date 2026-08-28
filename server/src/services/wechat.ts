@@ -28,6 +28,32 @@ export function wxSubscribeConfigured(): boolean {
   return !!(wxMpConfigured() && READY_TEMPLATE_ID);
 }
 
+function readableFile(filePath: string): boolean {
+  if (!filePath) return false;
+  try {
+    fs.accessSync(filePath, fs.constants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function getWechatReadiness() {
+  const apiV3KeyValid = Buffer.byteLength(API_V3_KEY, "utf8") === 32;
+  return {
+    miniProgramLogin: wxMpConfigured(),
+    paymentRequest:
+      !!(APPID && MCH_ID && MCH_SERIAL) &&
+      apiV3KeyValid &&
+      readableFile(MCH_KEY_PATH) &&
+      NOTIFY_URL.startsWith("https://") &&
+      !NOTIFY_URL.includes("localhost"),
+    paymentCallback:
+      apiV3KeyValid && readableFile(process.env.WECHAT_PLATFORM_CERT_PATH || ""),
+    subscribeMessage: wxSubscribeConfigured(),
+  };
+}
+
 function nonceStr(): string {
   return crypto.randomBytes(16).toString("hex");
 }

@@ -14,7 +14,8 @@
     "dump:specs": "node --import tsx prisma/dump-specs.ts",
     "migrate:specs": "node --import tsx prisma/migrate-specs.ts",
     "smoke": "node scripts/smoke.mjs",
-    "security": "npm run build && node scripts/security.mjs"
+    "security": "npm run build && node scripts/security.mjs",
+    "readiness:wechat": "npm run build && node scripts/wechat-readiness.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
