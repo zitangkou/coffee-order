@@ -39,53 +39,47 @@ enum PaymentChannel {
   BALANCE
 }
 
-enum RefundStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
 model Admin {
-  id           Int        @id @default(autoincrement())
-  username     String     @unique @db.VarChar(50)
-  passwordHash String     @db.VarChar(255)
-  role         AdminRole  @default(STAFF)
-  status       String     @default("ACTIVE") @db.VarChar(20)
-  mustChangePassword Boolean @default(false)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  refunds      Refund[]
-  auditLogs    AuditLog[]
+  id                 Int        @id @default(autoincrement())
+  username           String     @unique @db.VarChar(50)
+  passwordHash       String     @db.VarChar(255)
+  role               AdminRole  @default(STAFF)
+  status             String     @default("ACTIVE") @db.VarChar(20)
+  mustChangePassword Boolean    @default(false)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  refunds            Refund[]
+  auditLogs          AuditLog[]
 }
 
 model AuditLog {
-  id         Int       @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   adminId    Int?
-  admin      Admin?    @relation(fields: [adminId], references: [id])
-  action     String    @db.VarChar(50)
-  targetType String?   @db.VarChar(50)
+  admin      Admin?   @relation(fields: [adminId], references: [id])
+  action     String   @db.VarChar(50)
+  targetType String?  @db.VarChar(50)
   targetId   Int?
-  detail     String?   @db.Text
-  createdAt  DateTime  @default(now())
+  detail     String?  @db.Text
+  createdAt  DateTime @default(now())
 
   @@index([createdAt])
 }
 
 model ShopSetting {
-  id                  Int      @id @default(1)
-  name                String   @default("Coffee OS") @db.VarChar(100)
-  slogan              String?  @db.VarChar(200)
-  logoUrl             String?  @db.VarChar(500)
-  announcement        String?  @db.VarChar(500)
-  businessHours       String?  @db.VarChar(100)
-  acceptOrders        Boolean  @default(true)
-  dineInEnabled       Boolean  @default(true)
-  takeoutEnabled      Boolean  @default(true)
-  packFee             Decimal  @default(0) @db.Decimal(10, 2)
-  refundEnabled       Boolean  @default(true)
-  takeoutPhoneRequired Boolean @default(false)
-  printerConfig       Json?
-  updatedAt           DateTime @updatedAt
+  id                   Int      @id @default(1)
+  name                 String   @default("Coffee OS") @db.VarChar(100)
+  slogan               String?  @db.VarChar(200)
+  logoUrl              String?  @db.VarChar(500)
+  announcement         String?  @db.VarChar(500)
+  businessHours        String?  @db.VarChar(100)
+  acceptOrders         Boolean  @default(true)
+  dineInEnabled        Boolean  @default(true)
+  takeoutEnabled       Boolean  @default(true)
+  packFee              Decimal  @default(0) @db.Decimal(10, 2)
+  refundEnabled        Boolean  @default(true)
+  takeoutPhoneRequired Boolean  @default(false)
+  printerConfig        Json?
+  updatedAt            DateTime @updatedAt
 }
 
 model Category {
@@ -98,24 +92,24 @@ model Category {
 }
 
 model Product {
-  id          Int        @id @default(autoincrement())
+  id          Int                @id @default(autoincrement())
   categoryId  Int
-  category    Category   @relation(fields: [categoryId], references: [id])
-  name        String     @db.VarChar(100)
-  nameEn      String?    @db.VarChar(100)
-  description String?    @db.Text
-  flavorNotes String?    @db.VarChar(200)
-  origin      String?    @db.VarChar(100)
-  roastLevel  String?    @db.VarChar(50)
-  imageUrl    String?    @db.VarChar(500)
-  price       Decimal    @db.Decimal(10, 2)
-  isSignature Boolean    @default(false)
-  isHot       Boolean    @default(false)
-  isSoldOut   Boolean    @default(false)
-  isActive    Boolean    @default(true)
-  sortOrder   Int        @default(0)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  category    Category           @relation(fields: [categoryId], references: [id])
+  name        String             @db.VarChar(100)
+  nameEn      String?            @db.VarChar(100)
+  description String?            @db.Text
+  flavorNotes String?            @db.VarChar(200)
+  origin      String?            @db.VarChar(100)
+  roastLevel  String?            @db.VarChar(50)
+  imageUrl    String?            @db.VarChar(500)
+  price       Decimal            @db.Decimal(10, 2)
+  isSignature Boolean            @default(false)
+  isHot       Boolean            @default(false)
+  isSoldOut   Boolean            @default(false)
+  isActive    Boolean            @default(true)
+  sortOrder   Int                @default(0)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
   orderItems  OrderItem[]
   specGroups  ProductSpecGroup[]
 
@@ -123,13 +117,13 @@ model Product {
 }
 
 model SpecGroup {
-  id        Int       @id @default(autoincrement())
-  name      String    @unique @db.VarChar(50)
-  type      String    @default("SINGLE") @db.VarChar(20)
-  sortOrder Int       @default(0)
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id        Int                @id @default(autoincrement())
+  name      String             @unique @db.VarChar(50)
+  type      String             @default("SINGLE") @db.VarChar(20)
+  sortOrder Int                @default(0)
+  isActive  Boolean            @default(true)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
   options   SpecOption[]
   products  ProductSpecGroup[]
 }
@@ -161,13 +155,13 @@ model ProductSpecGroup {
 }
 
 model TableInfo {
-  id         Int       @id @default(autoincrement())
-  tableNo    String    @unique @db.VarChar(20)
-  qrCodeUrl  String?   @db.VarChar(500)
-  isActive   Boolean   @default(true)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  orders     Order[]
+  id        Int      @id @default(autoincrement())
+  tableNo   String   @unique @db.VarChar(20)
+  qrCodeUrl String?  @db.VarChar(500)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  orders    Order[]
 }
 
 model User {
@@ -202,80 +196,85 @@ model UserSubscribe {
 }
 
 model SmsCode {
-  id        Int      @id @default(autoincrement())
-  phone     String   @db.VarChar(20)
-  code      String   @db.VarChar(10)
+  id        Int       @id @default(autoincrement())
+  phone     String    @db.VarChar(20)
+  code      String    @db.VarChar(10)
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([phone])
 }
 
 model Order {
-  id           Int            @id @default(autoincrement())
-  orderNo      String         @unique @db.VarChar(32)
-  pickupNo     String         @db.VarChar(10)
-  userId       Int?
-  user         User?          @relation(fields: [userId], references: [id])
-  tableId      Int?
-  table        TableInfo?     @relation(fields: [tableId], references: [id])
-  orderType    OrderType      @default(DINE_IN)
-  status       OrderStatus    @default(UNPAID)
-  totalAmount  Decimal        @db.Decimal(10, 2)
-  packFee      Decimal        @default(0) @db.Decimal(10, 2)
-  remark       String?        @db.VarChar(255)
-  phone        String?        @db.VarChar(20)
-  payType      PayType        @default(WECHAT)
-  paidAt       DateTime?
-  refundedAt   DateTime?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  items        OrderItem[]
-  payments     Payment[]
-  refunds      Refund[]
+  id          Int         @id @default(autoincrement())
+  orderNo     String      @unique @db.VarChar(32)
+  pickupNo    String      @db.VarChar(10)
+  userId      Int?
+  user        User?       @relation(fields: [userId], references: [id])
+  tableId     Int?
+  table       TableInfo?  @relation(fields: [tableId], references: [id])
+  orderType   OrderType   @default(DINE_IN)
+  status      OrderStatus @default(UNPAID)
+  totalAmount Decimal     @db.Decimal(10, 2)
+  packFee     Decimal     @default(0) @db.Decimal(10, 2)
+  remark      String?     @db.VarChar(255)
+  phone       String?     @db.VarChar(20)
+  payType     PayType     @default(WECHAT)
+  paidAt      DateTime?
+  refundedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  items       OrderItem[]
+  payments    Payment[]
+  refunds     Refund[]
 
   @@index([status, createdAt])
 }
 
 model OrderItem {
-  id          Int      @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   orderId     Int
-  order       Order    @relation(fields: [orderId], references: [id])
+  order       Order   @relation(fields: [orderId], references: [id])
   productId   Int
-  product     Product  @relation(fields: [productId], references: [id])
-  productName String   @db.VarChar(100)
+  product     Product @relation(fields: [productId], references: [id])
+  productName String  @db.VarChar(100)
   specsDetail Json
-  unitPrice   Decimal  @db.Decimal(10, 2)
-  quantity    Int      @default(1)
-  subtotal    Decimal  @db.Decimal(10, 2)
+  unitPrice   Decimal @db.Decimal(10, 2)
+  quantity    Int     @default(1)
+  subtotal    Decimal @db.Decimal(10, 2)
 
   @@index([orderId])
 }
 
 model Payment {
-  id            Int             @id @default(autoincrement())
+  id            Int            @id @default(autoincrement())
   orderId       Int
-  order         Order           @relation(fields: [orderId], references: [id])
-  transactionId String?         @unique @db.VarChar(64)
-  amount        Decimal         @db.Decimal(10, 2)
-  status        String          @default("SUCCESS") @db.VarChar(20)
-  channel       PaymentChannel  @default(MOCK)
-  createdAt     DateTime        @default(now())
+  order         Order          @relation(fields: [orderId], references: [id])
+  transactionId String?        @unique @db.VarChar(64)
+  amount        Decimal        @db.Decimal(10, 2)
+  status        String         @default("SUCCESS") @db.VarChar(20)
+  channel       PaymentChannel @default(MOCK)
+  createdAt     DateTime       @default(now())
 }
 
 model Refund {
-  id            Int          @id @default(autoincrement())
-  orderId       Int
-  order         Order        @relation(fields: [orderId], references: [id])
-  reason        String       @db.VarChar(255)
-  status        RefundStatus @default(PENDING)
-  statusBefore  OrderStatus  @default(PAID)
-  handledBy     Int?
-  admin         Admin?       @relation(fields: [handledBy], references: [id])
-  rejectReason  String?      @db.VarChar(255)
-  createdAt     DateTime     @default(now())
-  handledAt     DateTime?
+  id             Int         @id @default(autoincrement())
+  orderId        Int
+  order          Order       @relation(fields: [orderId], references: [id])
+  reason         String      @db.VarChar(255)
+  status         String      @default("PENDING") @db.VarChar(20)
+  statusBefore   OrderStatus @default(PAID)
+  outRefundNo    String?     @unique @db.VarChar(64)
+  wechatRefundId String?     @db.VarChar(64)
+  refundAmount   Decimal?    @db.Decimal(10, 2)
+  failureReason  String?     @db.VarChar(255)
+  handledBy      Int?
+  admin          Admin?      @relation(fields: [handledBy], references: [id])
+  rejectReason   String?     @db.VarChar(255)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @default(now()) @updatedAt
+  handledAt      DateTime?
 
   @@index([status])
 }

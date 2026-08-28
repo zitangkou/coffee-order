@@ -57,6 +57,18 @@ function defaultSpecs(product) {
   return specs;
 }
 
+async function createPaidOrder() {
+  const order = await call("/orders", {
+    method: "POST",
+    token: globalThis.userToken,
+    body: {
+      orderType: "TAKEOUT",
+      items: [{ productId: globalThis.firstProductId, quantity: 1, specs: defaultSpecs(globalThis.firstProduct) }],
+    },
+  });
+  return call(`/orders/${order.id}/mock-pay`, { method: "POST", token: globalThis.userToken });
+}
+
 async function main() {
   console.log("[smoke] Coffee OS 后端冒烟测试");
 
@@ -228,6 +240,11 @@ async function main() {
   });
 
   await check("接单/出餐", async () => {
+    await expectRejected(`/admin/orders/${globalThis.orderId}/status`, {
+      method: "PATCH",
+      token: globalThis.adminToken,
+      body: { status: "CANCELLED" },
+    });
     let o = await call(`/admin/orders/${globalThis.orderId}/status`, {
       method: "PATCH",
       token: globalThis.adminToken,
@@ -268,6 +285,33 @@ async function main() {
       body: { action: "approved" },
     });
     if (done.order.status !== "REFUNDED") throw new Error(`退款后状态=${done.order.status}`);
+    if (done.status !== "SUCCESS" || !done.outRefundNo) throw new Error(`资金退款状态=${done.status}`);
+  });
+
+  await check("拒绝退款恢复原订单状态", async () => {
+    const paid = await createPaidOrder();
+    const concurrent = await Promise.all(
+      [1, 2].map(() =>
+        fetch(`${BASE}/orders/${paid.id}/refund`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${globalThis.userToken}` },
+          body: JSON.stringify({ reason: "拒绝流程测试" }),
+        }).then((res) => res.json())
+      )
+    );
+    if (concurrent.filter((item) => item.code === 0).length !== 1) {
+      throw new Error("并发退款申请必须且只能成功一次");
+    }
+    const refunds = await call("/admin/refunds", { token: globalThis.adminToken });
+    const refund = refunds.find((item) => item.orderId === paid.id);
+    const done = await call(`/admin/refunds/${refund.id}`, {
+      method: "PUT",
+      token: globalThis.adminToken,
+      body: { action: "rejected", rejectReason: "测试拒绝" },
+    });
+    if (done.status !== "REJECTED" || done.order.status !== "PAID") {
+      throw new Error(`拒绝后退款=${done.status},订单=${done.order.status}`);
+    }
   });
 
   await check("商品图片上传", async () => {
@@ -402,13 +446,15 @@ async function main() {
   });
 
   await check("支付回调 fail-closed（未配置商户时拒绝）", async () => {
-    const res = await fetch(`${BASE}/payment/callback`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dummy: true }),
-    });
-    const json = await res.json();
-    if (json.code !== "FAIL") throw new Error("未配置微信支付时回调必须被拒绝");
+    for (const path of ["/payment/callback", "/refund/callback"]) {
+      const res = await fetch(`${BASE}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dummy: true }),
+      });
+      const json = await res.json();
+      if (json.code !== "FAIL") throw new Error(`未配置微信支付时 ${path} 必须被拒绝`);
+    }
   });
 
   await check("修改密码（改后还原）", async () => {

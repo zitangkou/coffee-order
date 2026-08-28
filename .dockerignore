@@ -5,6 +5,17 @@ server/dist
 server/dev.db
 server/uploads
 server/.env
+.env
+.env.*
+**/.env
+**/.env.*
+!web/.env.production
+secrets
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*apiclient*
 web/node_modules
 web/dist
 .git

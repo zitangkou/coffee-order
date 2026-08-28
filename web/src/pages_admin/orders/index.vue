@@ -54,9 +54,11 @@
         </view>
         <view class="o-remark">原因：{{ r.reason }}</view>
         <view class="o-remark">金额：¥{{ r.order.totalAmount }}</view>
+        <view class="o-remark">状态：{{ refundStatusText(r.status) }}</view>
         <view class="actions">
-          <view class="act-btn" @tap="handleRefund(r, 'approved')">同意退款</view>
-          <view class="act-btn danger" @tap="handleRefund(r, 'rejected')">拒绝</view>
+          <view v-if="r.status === 'PENDING'" class="act-btn" @tap="handleRefund(r, 'approved')">{{ handlingRefundId === r.id ? "处理中…" : "同意并原路退款" }}</view>
+          <view v-if="r.status === 'PENDING'" class="act-btn danger" @tap="handleRefund(r, 'rejected')">拒绝</view>
+          <view v-if="r.status === 'PROCESSING'" class="act-btn" @tap="syncRefund(r)">{{ handlingRefundId === r.id ? "同步中…" : "同步退款状态" }}</view>
         </view>
       </view>
       <view v-if="!refunds.length" class="empty">暂无退款申请</view>
@@ -80,7 +82,33 @@ const tabs = [
 const activeTab = ref("PAID");
 const orders = ref<Order[]>([]);
 const refunds = ref<any[]>([]);
+const handlingRefundId = ref<number | null>(null);
 let timer: any = null;
+
+function refundStatusText(status: string) {
+  return ({
+    PENDING: "待审核",
+    PROCESSING: "退款处理中",
+    SUCCESS: "退款成功",
+    FAILED: "退款异常",
+    REJECTED: "已拒绝",
+    APPROVED: "历史已同意",
+  } as Record<string, string>)[status] || status;
+}
+
+async function syncRefund(refund: any) {
+  if (handlingRefundId.value !== null) return;
+  handlingRefundId.value = refund.id;
+  try {
+    await api.adminSyncRefund(refund.id);
+    uni.showToast({ title: "已同步", icon: "success" });
+    load();
+  } catch (e: any) {
+    uni.showToast({ title: e.message || "同步失败", icon: "none" });
+  } finally {
+    handlingRefundId.value = null;
+  }
+}
 
 onLoad((options) => {
   const tab = (options as any)?.tab;
@@ -125,8 +153,21 @@ async function setStatus(o: Order, status: string) {
 }
 
 async function handleRefund(r: any, action: "approved" | "rejected") {
+  if (handlingRefundId.value !== null) return;
   let rejectReason = "";
-  if (action === "rejected") {
+  if (action === "approved") {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: "确认原路退款",
+        content: `将向顾客原路退回 ¥${r.order.totalAmount}，提交后请等待微信退款结果。`,
+        confirmText: "确认退款",
+        confirmColor: "#c0392b",
+        success: (result) => resolve(result.confirm),
+        fail: () => resolve(false),
+      });
+    });
+    if (!confirmed) return;
+  } else {
     const res = await new Promise<string>((resolve) => {
       uni.showModal({
         title: "拒绝退款",
@@ -139,11 +180,14 @@ async function handleRefund(r: any, action: "approved" | "rejected") {
     rejectReason = res;
   }
   try {
+    handlingRefundId.value = r.id;
     await api.adminHandleRefund(r.id, action, rejectReason);
-    uni.showToast({ title: action === "approved" ? "已同意退款" : "已拒绝", icon: "success" });
+    uni.showToast({ title: action === "approved" ? "退款已提交" : "已拒绝", icon: "success" });
     load();
   } catch (e: any) {
     uni.showToast({ title: e.message || "操作失败", icon: "none" });
+  } finally {
+    handlingRefundId.value = null;
   }
 }
 

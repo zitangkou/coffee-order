@@ -14,6 +14,9 @@ const API_V3_KEY = process.env.WECHAT_API_V3_KEY || "";
 const NOTIFY_URL =
   process.env.WECHAT_PAY_NOTIFY_URL ||
   `${process.env.WEB_BASE_URL || "http://localhost"}/api/payment/callback`;
+const REFUND_NOTIFY_URL =
+  process.env.WECHAT_REFUND_NOTIFY_URL ||
+  `${process.env.WEB_BASE_URL || "http://localhost"}/api/refund/callback`;
 const READY_TEMPLATE_ID = process.env.WECHAT_SUBSCRIBE_TEMPLATE_READY || "";
 
 export function wxMpConfigured(): boolean {
@@ -50,6 +53,12 @@ export function getWechatReadiness() {
       !NOTIFY_URL.includes("localhost"),
     paymentCallback:
       apiV3KeyValid && readableFile(process.env.WECHAT_PLATFORM_CERT_PATH || ""),
+    refundFlow:
+      apiV3KeyValid &&
+      readableFile(MCH_KEY_PATH) &&
+      readableFile(process.env.WECHAT_PLATFORM_CERT_PATH || "") &&
+      REFUND_NOTIFY_URL.startsWith("https://") &&
+      !REFUND_NOTIFY_URL.includes("localhost"),
     subscribeMessage: wxSubscribeConfigured(),
   };
 }
@@ -59,8 +68,12 @@ function nonceStr(): string {
 }
 
 function rsaSign(message: string): string {
-  const key = fs.readFileSync(MCH_KEY_PATH, "utf8");
-  return crypto.createSign("RSA-SHA256").update(message).sign(key, "base64");
+  try {
+    const key = fs.readFileSync(MCH_KEY_PATH, "utf8");
+    return crypto.createSign("RSA-SHA256").update(message).sign(key, "base64");
+  } catch {
+    throw new Error("微信商户签名配置不可用");
+  }
 }
 
 function authHeader(method: string, path: string, body: string): string {
@@ -73,6 +86,35 @@ function authHeader(method: string, path: string, body: string): string {
     `nonce_str="${nonce}",signature="${signature}",` +
     `timestamp="${timestamp}",serial_no="${MCH_SERIAL}"`
   );
+}
+
+async function merchantRequest(method: "GET" | "POST", path: string, body = ""): Promise<any> {
+  const res = await fetch(`https://api.mch.weixin.qq.com${path}`, {
+    method,
+    headers: {
+      Authorization: authHeader(method, path, body),
+      Accept: "application/json",
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(body ? { body } : {}),
+  });
+  if (res.status === 204) return null;
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const error: any = new Error(`微信支付请求失败：${json.message || json.code || res.status}`);
+    error.wechatCode = json.code;
+    throw error;
+  }
+  return json;
+}
+
+function truncateUtf8(value: string, maxBytes: number): string {
+  let result = "";
+  for (const char of value) {
+    if (Buffer.byteLength(result + char, "utf8") > maxBytes) break;
+    result += char;
+  }
+  return result;
 }
 
 // 微信登录：code 换取 openid
@@ -103,6 +145,9 @@ export async function createJsapiPayment(
     notify_url: NOTIFY_URL,
     amount: { total: Math.round(Number(order.totalAmount) * 100) },
     payer: { openid },
+    time_expire: new Date(
+      Date.now() + Number(process.env.ORDER_TIMEOUT_MINUTES || 15) * 60_000
+    ).toISOString(),
   });
   const res = await fetch(`https://api.mch.weixin.qq.com${path}`, {
     method: "POST",
@@ -143,6 +188,40 @@ export async function queryJsapiPayment(orderNo: string): Promise<any> {
   const json = await res.json();
   if (!res.ok) throw new Error(`微信查单失败：${json.message || json.code || "未知错误"}`);
   return json;
+}
+
+export async function closeJsapiPayment(orderNo: string): Promise<void> {
+  if (!wxPayConfigured()) throw new Error("微信支付未配置");
+  const path = `/v3/pay/transactions/out-trade-no/${encodeURIComponent(orderNo)}/close`;
+  await merchantRequest("POST", path, JSON.stringify({ mchid: MCH_ID }));
+}
+
+export async function requestWechatRefund(input: {
+  orderNo: string;
+  outRefundNo: string;
+  reason: string;
+  totalFen: number;
+  refundFen: number;
+}): Promise<any> {
+  if (!wxPayConfigured()) throw new Error("微信支付未配置");
+  if (!REFUND_NOTIFY_URL.startsWith("https://") || REFUND_NOTIFY_URL.includes("localhost")) {
+    throw new Error("微信退款回调地址必须是公网 HTTPS 地址");
+  }
+  const path = "/v3/refund/domestic/refunds";
+  const body = JSON.stringify({
+    out_trade_no: input.orderNo,
+    out_refund_no: input.outRefundNo,
+    reason: truncateUtf8(input.reason || "商家同意退款", 80),
+    notify_url: REFUND_NOTIFY_URL,
+    amount: { refund: input.refundFen, total: input.totalFen, currency: "CNY" },
+  });
+  return merchantRequest("POST", path, body);
+}
+
+export async function queryWechatRefund(outRefundNo: string): Promise<any> {
+  if (!wxPayConfigured()) throw new Error("微信支付未配置");
+  const path = `/v3/refund/domestic/refunds/${encodeURIComponent(outRefundNo)}`;
+  return merchantRequest("GET", path);
 }
 
 // 微信 access_token（缓存 100 分钟）

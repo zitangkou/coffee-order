@@ -34,5 +34,6 @@ export const STORAGE_KEYS = {
   adminInfo: "admin_info",
 };
 
-// 微信订阅消息：出餐通知模板 ID（提审前替换为真实模板 ID；未配置时跳过订阅引导）
-export const WX_SUBSCRIBE_TEMPLATE_READY = "your_template_id";
+// 微信订阅消息模板通过私密构建环境注入，不提交到仓库；未配置时跳过订阅引导。
+export const WX_SUBSCRIBE_TEMPLATE_READY: string =
+  import.meta.env.VITE_WX_SUBSCRIBE_TEMPLATE_READY || "";

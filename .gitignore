@@ -4,6 +4,13 @@ dist/
 server/dev.db
 server/uploads/
 server/.env
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+*.pfx
 *.log
 secrets/*
 !secrets/.gitkeep

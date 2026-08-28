@@ -90,6 +90,8 @@ export const api = {
       data: { action, rejectReason },
       admin: true,
     }),
+  adminSyncRefund: (id: number) =>
+    request<any>({ url: `/admin/refunds/${id}/sync`, method: "POST", admin: true }),
   adminCategories: () => request<any[]>({ url: "/admin/categories", admin: true }),
   adminCreateCategory: (name: string) =>
     request<any>({ url: "/admin/categories", method: "POST", data: { name }, admin: true }),

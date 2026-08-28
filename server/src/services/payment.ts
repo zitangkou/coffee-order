@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import { prisma } from "../lib/prisma.js";
+import { queryWechatRefund, requestWechatRefund, wxPayConfigured } from "./wechat.js";
 
 // 微信支付 v3 回调：验签 + 解密 + 金额校验 + 幂等处理。
 // fail-closed：未配置商户证书/密钥时一律拒绝回调，绝不默认可通过。
@@ -46,28 +47,45 @@ function decryptResource(resource: any, apiV3Key: string): any {
   return JSON.parse(decrypted.toString("utf8"));
 }
 
+function verifyAndDecryptCallback(
+  rawBody: Buffer,
+  headers: Record<string, string>
+): any {
+  if (!configReady()) throw new Error("微信支付未配置，回调已拒绝");
+  let cert = "";
+  try {
+    cert = fs.readFileSync(process.env.WECHAT_PLATFORM_CERT_PATH!, "utf8");
+  } catch {
+    throw new Error("微信平台验签配置不可用");
+  }
+  if (!verifyWechatCallbackSignature(rawBody, headers, cert)) {
+    throw new Error("微信支付回调验签失败");
+  }
+  const payload = JSON.parse(rawBody.toString("utf8"));
+  if (!payload?.resource) throw new Error("回调数据缺少 resource");
+  return decryptResource(payload.resource, process.env.WECHAT_API_V3_KEY!);
+}
+
 export async function handlePaymentCallback(
   rawBody: Buffer,
   headers: Record<string, string>
 ): Promise<{ code: string; message: string }> {
-  if (!configReady()) {
-    throw new Error("微信支付未配置，回调已拒绝");
-  }
-  const cert = fs.readFileSync(process.env.WECHAT_PLATFORM_CERT_PATH!, "utf8");
-  if (!verifyWechatCallbackSignature(rawBody, headers, cert)) {
-    throw new Error("微信支付回调验签失败");
-  }
-
-  const payload = JSON.parse(rawBody.toString("utf8"));
-  const resource = payload?.resource;
-  if (!resource) throw new Error("回调数据缺少 resource");
-  const event = decryptResource(resource, process.env.WECHAT_API_V3_KEY!);
+  const event = verifyAndDecryptCallback(rawBody, headers);
 
   if (event.trade_state !== "SUCCESS") {
     return { code: "SUCCESS", message: "非支付成功事件" };
   }
 
   await confirmWechatPayment(event);
+  return { code: "SUCCESS", message: "成功" };
+}
+
+export async function handleRefundCallback(
+  rawBody: Buffer,
+  headers: Record<string, string>
+): Promise<{ code: string; message: string }> {
+  const event = verifyAndDecryptCallback(rawBody, headers);
+  await confirmWechatRefund(event);
   return { code: "SUCCESS", message: "成功" };
 }
 
@@ -122,4 +140,145 @@ export async function confirmWechatPayment(event: any): Promise<void> {
     if (error?.code === "P2002") return;
     throw error;
   }
+}
+
+type RefundState = "PROCESSING" | "SUCCESS" | "FAILED";
+
+function normalizeRefundState(status: string): RefundState {
+  if (status === "SUCCESS") return "SUCCESS";
+  if (status === "PROCESSING") return "PROCESSING";
+  if (status === "CLOSED" || status === "ABNORMAL" || status === "FAILED") return "FAILED";
+  throw new Error(`未知微信退款状态：${status || "EMPTY"}`);
+}
+
+export async function confirmWechatRefund(event: any): Promise<void> {
+  const outRefundNo = String(event.out_refund_no || "");
+  const state = normalizeRefundState(String(event.refund_status || event.status || ""));
+  if (!outRefundNo) throw new Error("退款结果缺少商户退款单号");
+  const refund = await prisma.refund.findUnique({
+    where: { outRefundNo },
+    include: { order: true },
+  });
+  if (!refund) throw new Error("退款申请不存在");
+  if (event.out_trade_no && String(event.out_trade_no) !== refund.order.orderNo) {
+    throw new Error("退款结果订单号不匹配");
+  }
+  const refundFen = Number(event.amount?.refund ?? 0);
+  if (refundFen > 0 && Math.round(Number(refund.refundAmount || refund.order.totalAmount) * 100) !== refundFen) {
+    throw new Error("退款结果金额不匹配");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const current = await tx.refund.findUnique({ where: { id: refund.id } });
+    if (!current) throw new Error("退款申请不存在");
+    // 微信回调和主动查询可能乱序到达：成功是不可逆终态；失败只允许被后续成功纠正。
+    if (current.status === "SUCCESS") return;
+    if (current.status === "FAILED" && state !== "SUCCESS") return;
+    await tx.refund.update({
+      where: { id: refund.id },
+      data: {
+        status: state,
+        wechatRefundId: event.refund_id ? String(event.refund_id) : undefined,
+        failureReason:
+          state === "FAILED"
+            ? String(event.refund_status || event.status || "退款关闭或异常").slice(0, 255)
+            : null,
+      },
+    });
+    if (state === "SUCCESS") {
+      await tx.order.updateMany({
+        where: { id: refund.orderId, status: "REFUNDING" },
+        data: { status: "REFUNDED", refundedAt: new Date() },
+      });
+    } else if (state === "FAILED") {
+      await tx.order.updateMany({
+        where: { id: refund.orderId, status: "REFUNDING" },
+        data: { status: refund.statusBefore as any },
+      });
+    }
+  });
+}
+
+export async function submitWechatRefund(refundId: number, adminId: number): Promise<void> {
+  const refund = await prisma.refund.findUnique({
+    where: { id: refundId },
+    include: { order: { include: { payments: true } } },
+  });
+  if (!refund || refund.status !== "PENDING") throw new Error("退款申请不存在或已处理");
+  const successfulPayment = refund.order.payments.find((item) => item.status === "SUCCESS");
+  if (!successfulPayment) throw new Error("订单没有成功支付记录");
+  const outRefundNo = refund.outRefundNo || `RF${refund.id}_${refund.order.orderNo}`;
+  const amount = Number(refund.order.totalAmount);
+  const claimed = await prisma.refund.updateMany({
+    where: { id: refund.id, status: "PENDING" },
+    data: {
+      status: "PROCESSING",
+      outRefundNo,
+      refundAmount: amount,
+      handledBy: adminId,
+      handledAt: new Date(),
+      failureReason: null,
+    },
+  });
+  if (claimed.count !== 1) throw new Error("退款申请已被其他操作处理，请刷新后重试");
+
+  if (successfulPayment.channel === "MOCK" && process.env.MOCK_PAYMENT === "true") {
+    await confirmWechatRefund({
+      out_refund_no: outRefundNo,
+      out_trade_no: refund.order.orderNo,
+      refund_status: "SUCCESS",
+      refund_id: `MOCK_REFUND_${refund.id}`,
+      amount: { refund: Math.round(amount * 100) },
+    });
+    return;
+  }
+  if (successfulPayment.channel !== "WECHAT") {
+    await prisma.refund.update({ where: { id: refund.id }, data: { status: "PENDING" } });
+    throw new Error("当前支付渠道暂不支持自动退款");
+  }
+
+  try {
+    const result = await requestWechatRefund({
+      orderNo: refund.order.orderNo,
+      outRefundNo,
+      reason: refund.reason,
+      totalFen: Math.round(Number(refund.order.totalAmount) * 100),
+      refundFen: Math.round(amount * 100),
+    });
+    await confirmWechatRefund({ ...result, out_refund_no: outRefundNo, out_trade_no: refund.order.orderNo });
+  } catch (error: any) {
+    await prisma.refund.updateMany({
+      where: { id: refund.id, status: "PROCESSING" },
+      data: { status: "PENDING", failureReason: String(error?.message || "退款申请失败").slice(0, 255) },
+    });
+    throw error;
+  }
+}
+
+export async function syncWechatRefund(refundId: number): Promise<void> {
+  const refund = await prisma.refund.findUnique({ where: { id: refundId } });
+  if (!refund?.outRefundNo) throw new Error("退款尚未提交微信");
+  const result = await queryWechatRefund(refund.outRefundNo);
+  await confirmWechatRefund({ ...result, out_refund_no: refund.outRefundNo });
+}
+
+export async function syncProcessingWechatRefunds(): Promise<number> {
+  if (!wxPayConfigured()) return 0;
+  const cutoff = new Date(Date.now() - 60_000);
+  const refunds = await prisma.refund.findMany({
+    where: { status: "PROCESSING", outRefundNo: { not: null }, updatedAt: { lt: cutoff } },
+    orderBy: { updatedAt: "asc" },
+    take: 20,
+    select: { id: true },
+  });
+  let synced = 0;
+  for (const refund of refunds) {
+    try {
+      await syncWechatRefund(refund.id);
+      synced += 1;
+    } catch (error: any) {
+      console.warn(`[refund-sync] 退款状态同步失败: ${error?.message || "未知错误"}`);
+    }
+  }
+  return synced;
 }

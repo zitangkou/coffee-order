@@ -13,6 +13,7 @@ import { requireAdmin, requireManager } from "../middleware/auth.js";
 import { loginLimiter } from "../middleware/rateLimit.js";
 import { logAudit } from "../lib/audit.js";
 import { handleRefund, transitionOrder } from "../services/order.js";
+import { syncWechatRefund } from "../services/payment.js";
 import { createUnlimitedMiniProgramCode } from "../services/wechat.js";
 import {
   hourlyDistribution,
@@ -219,9 +220,21 @@ router.put("/refunds/:id", requireAdmin, requireManager, async (req, res) => {
       str(req.body?.rejectReason)
     );
     await logAudit((req as any).admin.id, "REFUND_HANDLE", "Refund", num(req.params.id), action);
-    ok(res, refund, action === "APPROVED" ? "已同意退款" : "已拒绝退款");
+    ok(res, refund, action === "APPROVED" ? "退款已提交原路退回" : "已拒绝退款");
   } catch (e: any) {
     fail(res, e?.message || "退款处理失败");
+  }
+});
+
+router.post("/refunds/:id/sync", requireAdmin, requireManager, async (req, res) => {
+  try {
+    const refundId = num(req.params.id);
+    await syncWechatRefund(refundId);
+    await logAudit((req as any).admin.id, "REFUND_SYNC", "Refund", refundId);
+    const refund = await prisma.refund.findUnique({ where: { id: refundId }, include: { order: true } });
+    ok(res, refund, "退款状态已同步");
+  } catch (e: any) {
+    fail(res, e?.message || "退款状态同步失败");
   }
 });
 

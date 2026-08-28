@@ -39,7 +39,7 @@
     <view v-if="order?.refunds?.length" class="card">
       <view class="spec-name">退款记录</view>
       <view class="o-row" v-for="r in order.refunds" :key="r.id">
-        <text class="label">{{ r.status === "PENDING" ? "审核中" : r.status === "APPROVED" ? "已同意" : "已拒绝" }}</text>
+        <text class="label">{{ refundStatusText(r.status) }}</text>
         <text class="text-sub">{{ r.reason }}</text>
       </view>
     </view>
@@ -73,6 +73,17 @@ import StepBar from "../../components/StepBar.vue";
 
 const order = ref<Order | null>(null);
 const showRefund = ref(false);
+
+function refundStatusText(status: string) {
+  return ({
+    PENDING: "审核中",
+    PROCESSING: "退款处理中",
+    SUCCESS: "退款成功",
+    FAILED: "退款异常，请联系门店",
+    REJECTED: "已拒绝",
+    APPROVED: "历史已同意",
+  } as Record<string, string>)[status] || status;
+}
 const refundReason = ref("");
 const reasons = ["不想要了", "点错了", "等待太久", "品质问题", "其他"];
 let timer: any = null;

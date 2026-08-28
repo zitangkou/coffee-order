@@ -6,7 +6,11 @@ import { signUser } from "../lib/jwt.js";
 import { serializeOrder, serializeProduct } from "../lib/json.js";
 import { requireUser } from "../middleware/auth.js";
 import { createOrder, mockPay, requestRefund, wechatPay } from "../services/order.js";
-import { confirmWechatPayment, handlePaymentCallback } from "../services/payment.js";
+import {
+  confirmWechatPayment,
+  handlePaymentCallback,
+  handleRefundCallback,
+} from "../services/payment.js";
 import { memberProfile } from "../services/member.js";
 import { isConsoleSms, sendSmsCode } from "../services/sms.js";
 import { createJsapiPayment, jscode2session, queryJsapiPayment, wxMpConfigured, wxPayConfigured } from "../services/wechat.js";
@@ -289,9 +293,22 @@ router.post("/payment/callback", async (req, res) => {
       (req as any).rawBody || Buffer.from(JSON.stringify(req.body ?? {}), "utf8");
     const result = await handlePaymentCallback(rawBody, req.headers as Record<string, string>);
     res.json(result);
-  } catch (e: any) {
-    console.error("[payment] callback error:", e?.message);
-    res.status(400).json({ code: "FAIL", message: e?.message || "回调处理失败" });
+  } catch {
+    console.error("[payment] callback rejected");
+    res.status(400).json({ code: "FAIL", message: "回调处理失败" });
+  }
+});
+
+// 微信退款结果回调（公网可访问，验签和解密规则与支付回调一致）
+router.post("/refund/callback", async (req, res) => {
+  try {
+    const rawBody: Buffer =
+      (req as any).rawBody || Buffer.from(JSON.stringify(req.body ?? {}), "utf8");
+    const result = await handleRefundCallback(rawBody, req.headers as Record<string, string>);
+    res.json(result);
+  } catch {
+    console.error("[refund] callback rejected");
+    res.status(400).json({ code: "FAIL", message: "回调处理失败" });
   }
 });
 

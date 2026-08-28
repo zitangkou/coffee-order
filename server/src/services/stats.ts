@@ -138,10 +138,18 @@ export async function categoryShare(unit: "today" | "week" | "month" = "today") 
 export async function refundStats(unit: "today" | "week" | "month" = "today") {
   const { start, end } = rangeFor(unit);
   const refunds = await prisma.refund.findMany({
-    where: { status: "APPROVED", handledAt: { gte: start, lte: end } },
+    where: {
+      OR: [
+        { status: "SUCCESS", updatedAt: { gte: start, lte: end } },
+        { status: "APPROVED", handledAt: { gte: start, lte: end } },
+      ],
+    },
     include: { order: true },
   });
-  const amount = refunds.reduce((s, r) => s + Number(r.order?.totalAmount ?? 0), 0);
+  const amount = refunds.reduce(
+    (s, r) => s + Number(r.refundAmount ?? r.order?.totalAmount ?? 0),
+    0
+  );
   return {
     count: refunds.length,
     amount: Math.round(amount * 100) / 100,

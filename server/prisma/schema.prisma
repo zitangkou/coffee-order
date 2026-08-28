@@ -230,17 +230,22 @@ model Payment {
 }
 
 model Refund {
-  id           Int       @id @default(autoincrement())
-  orderId      Int
-  order        Order     @relation(fields: [orderId], references: [id])
-  reason       String
-  status       String    @default("PENDING")
-  statusBefore String    @default("PAID")
-  handledBy    Int?
-  admin        Admin?    @relation(fields: [handledBy], references: [id])
-  rejectReason String?
-  createdAt    DateTime  @default(now())
-  handledAt    DateTime?
+  id             Int       @id @default(autoincrement())
+  orderId        Int
+  order          Order     @relation(fields: [orderId], references: [id])
+  reason         String
+  status         String    @default("PENDING")
+  statusBefore   String    @default("PAID")
+  outRefundNo    String?   @unique
+  wechatRefundId String?
+  refundAmount   Float?
+  failureReason  String?
+  handledBy      Int?
+  admin          Admin?    @relation(fields: [handledBy], references: [id])
+  rejectReason   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now()) @updatedAt
+  handledAt      DateTime?
 
   @@index([status])
 }
