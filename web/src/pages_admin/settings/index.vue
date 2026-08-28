@@ -56,6 +56,7 @@
 import { reactive, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { api } from "../../api";
+import { STORAGE_KEYS } from "../../config";
 
 const form = reactive<Record<string, any>>({
   name: "",
@@ -108,7 +109,7 @@ async function changePassword() {
     uni.showToast({ title: "请填写完整", icon: "none" });
     return;
   }
-  if (newPassword.value.length < 6) {
+  if (newPassword.value.length < 8) {
     uni.showToast({ title: "新密码至少 8 位", icon: "none" });
     return;
   }
@@ -117,7 +118,8 @@ async function changePassword() {
     return;
   }
   try {
-    await api.adminChangePassword(oldPassword.value, newPassword.value);
+    const result = await api.adminChangePassword(oldPassword.value, newPassword.value);
+    uni.setStorageSync(STORAGE_KEYS.adminToken, result.token);
     oldPassword.value = "";
     newPassword.value = "";
     confirmPassword.value = "";

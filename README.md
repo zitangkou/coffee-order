@@ -80,6 +80,8 @@ npm run build:mp-weixin # 微信小程序产物 dist/build/mp-weixin
 
 最新发布风险与优化优先级见 **[docs/发布前全面复盘-2026-08-29.md](docs/发布前全面复盘-2026-08-29.md)**。
 
+分批实施进度见 **[docs/发布前优化排期.md](docs/发布前优化排期.md)**。
+
 **服务器上执行：**
 
 ```bash

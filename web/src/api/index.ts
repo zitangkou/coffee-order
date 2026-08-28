@@ -144,7 +144,7 @@ export const api = {
     request<any>({ url: "/admin/settings", method: "PUT", data, admin: true }),
   adminPrinterTest: () => request<any>({ url: "/admin/printer/test", method: "POST", admin: true }),
   adminChangePassword: (oldPassword: string, newPassword: string) =>
-    request<any>({
+    request<{ username: string; mustChangePassword: boolean; token: string }>({
       url: "/admin/password",
       method: "PUT",
       data: { oldPassword, newPassword },

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import crypto from "node:crypto";
 import { prisma } from "../lib/prisma.js";
 import { num, str } from "../lib/validate.js";
 import { fail, ok } from "../lib/response.js";
@@ -12,7 +13,7 @@ import {
   handleRefundCallback,
 } from "../services/payment.js";
 import { memberProfile } from "../services/member.js";
-import { isConsoleSms, sendSmsCode } from "../services/sms.js";
+import { isConsoleSms, isSmsEnabled, sendSmsCode } from "../services/sms.js";
 import { createJsapiPayment, jscode2session, queryJsapiPayment, wxMpConfigured, wxPayConfigured } from "../services/wechat.js";
 import { orderLimiter, paymentLimiter, smsLimiter } from "../middleware/rateLimit.js";
 
@@ -85,6 +86,9 @@ router.get("/shop", async (_req, res) => {
 });
 
 router.post("/auth/guest", async (req, res) => {
+  if (process.env.NODE_ENV === "production" || process.env.GUEST_LOGIN_ENABLED === "false") {
+    return fail(res, "游客登录未启用", 403, 403);
+  }
   const deviceId = str(req.body?.deviceId, "").trim();
   if (!deviceId) return fail(res, "缺少设备标识");
   const existing = await prisma.user.findFirst({ where: { openid: `guest:${deviceId}`, status: "ACTIVE" } });
@@ -120,6 +124,7 @@ router.post("/auth/wx-login", async (req, res) => {
 });
 
 router.post("/auth/send-code", smsLimiter(), async (req, res) => {
+  if (!isSmsEnabled()) return fail(res, "手机号绑定服务暂未开放", 503, 503);
   const phone = str(req.body?.phone, "").trim();
   if (!/^1[3-9]\d{9}$/.test(phone)) return fail(res, "手机号格式不正确");
   const last = await prisma.smsCode.findFirst({
@@ -129,9 +134,19 @@ router.post("/auth/send-code", smsLimiter(), async (req, res) => {
   if (last && Date.now() - last.createdAt.getTime() < 60_000) {
     return fail(res, "发送过于频繁，请 1 分钟后再试");
   }
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  if (process.env.NODE_ENV === "production" && isConsoleSms()) {
+    return fail(res, "手机号绑定服务未正确配置", 503, 503);
+  }
+  const code = String(crypto.randomInt(100000, 1000000));
+  const codeHash = crypto
+    .createHmac("sha256", process.env.JWT_SECRET || "coffee-os-sms-dev")
+    .update(code)
+    .digest("hex");
+  await prisma.smsCode.deleteMany({
+    where: { createdAt: { lt: new Date(Date.now() - 24 * 60 * 60_000) } },
+  });
   await prisma.smsCode.create({
-    data: { phone, code, expiresAt: new Date(Date.now() + 5 * 60_000) },
+    data: { phone, code: codeHash, expiresAt: new Date(Date.now() + 5 * 60_000) },
   });
   await sendSmsCode(phone, code);
   ok(res, { devCode: isConsoleSms() ? code : undefined }, "验证码已发送");
@@ -145,10 +160,18 @@ router.post("/user/phone", requireUser, async (req, res) => {
   if (!/^1[3-9]\d{9}$/.test(phone)) return fail(res, "手机号格式不正确");
   if (!/^\d{6}$/.test(code)) return fail(res, "验证码格式不正确");
   const record = await prisma.smsCode.findFirst({
-    where: { phone, code, usedAt: null },
+    where: { phone, usedAt: null },
     orderBy: { createdAt: "desc" },
   });
-  if (!record || record.expiresAt < new Date()) {
+  const codeHash = crypto
+    .createHmac("sha256", process.env.JWT_SECRET || "coffee-os-sms-dev")
+    .update(code)
+    .digest("hex");
+  if (!record || record.expiresAt < new Date() || record.attempts >= 5) {
+    return fail(res, "验证码无效或已过期");
+  }
+  if (record.code !== codeHash) {
+    await prisma.smsCode.update({ where: { id: record.id }, data: { attempts: { increment: 1 } } });
     return fail(res, "验证码无效或已过期");
   }
   const dup = await prisma.user.findFirst({ where: { phone, id: { not: userId } } });

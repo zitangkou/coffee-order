@@ -5,6 +5,7 @@ const SECRET = process.env.JWT_SECRET || "coffee-os-dev-secret";
 export interface AdminPayload {
   id: number;
   role: string;
+  ver: number;
   type: "admin";
 }
 
@@ -14,7 +15,7 @@ export interface UserPayload {
   type: "user";
 }
 
-export function signAdmin(payload: { id: number; role: string }) {
+export function signAdmin(payload: { id: number; role: string; ver: number }) {
   return jwt.sign({ ...payload, type: "admin" }, SECRET, { expiresIn: "2d" });
 }
 

@@ -13,6 +13,16 @@ if (process.env.NODE_ENV === "production") {
   if (process.env.MOCK_PAYMENT === "true") {
     throw new Error("生产环境禁止启用 MOCK_PAYMENT");
   }
+  const smsProvider = process.env.SMS_PROVIDER || "disabled";
+  if (smsProvider === "console") {
+    throw new Error("生产环境禁止使用 console 短信服务");
+  }
+  if (smsProvider !== "disabled") {
+    throw new Error("当前版本尚未实现生产短信供应商，请先保持 SMS_PROVIDER=disabled");
+  }
+  if (process.env.GUEST_LOGIN_ENABLED === "true") {
+    throw new Error("生产环境禁止启用游客登录");
+  }
 }
 
 createApp().listen(port, () => {

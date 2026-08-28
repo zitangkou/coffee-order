@@ -14,6 +14,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { api } from "../../api";
+import { STORAGE_KEYS } from "../../config";
 
 const oldPassword = ref("");
 const newPassword = ref("");
@@ -34,7 +35,8 @@ async function submit() {
   }
   try {
     uni.showLoading({ title: "提交中" });
-    await api.adminChangePassword(oldPassword.value, newPassword.value);
+    const result = await api.adminChangePassword(oldPassword.value, newPassword.value);
+    uni.setStorageSync(STORAGE_KEYS.adminToken, result.token);
     uni.hideLoading();
     uni.showToast({ title: "密码已修改", icon: "success" });
     setTimeout(() => uni.redirectTo({ url: "/pages_admin/dashboard/index" }), 600);

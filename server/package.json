@@ -16,7 +16,8 @@
     "smoke": "node scripts/smoke.mjs",
     "security": "npm run build && node scripts/security.mjs",
     "readiness:wechat": "npm run build && node scripts/wechat-readiness.mjs",
-    "test:refund-state": "npm run build && node scripts/refund-state.mjs"
+    "test:refund-state": "npm run build && node scripts/refund-state.mjs",
+    "test:auth-safety": "npm run build && node scripts/auth-safety.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

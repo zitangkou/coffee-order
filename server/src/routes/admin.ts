@@ -66,7 +66,7 @@ router.post("/login", loginLimiter(), async (req, res) => {
     return fail(res, "用户名或密码错误", 401, 401);
   }
   ok(res, {
-    token: signAdmin({ id: admin.id, role: admin.role }),
+    token: signAdmin({ id: admin.id, role: admin.role, ver: admin.tokenVersion }),
     admin: {
       id: admin.id,
       username: admin.username,
@@ -115,8 +115,20 @@ router.put("/admins/:id", requireAdmin, requireManager, async (req, res) => {
     data.passwordHash = bcrypt.hashSync(str(body.password), 10);
     data.mustChangePassword = true;
   }
+  data.tokenVersion = { increment: 1 };
   const admin = await prisma.admin.update({ where: { id }, data });
-  await logAudit((req as any).admin.id, "ADMIN_UPDATE", "Admin", id, JSON.stringify(data));
+  const changedFields = [
+    typeof body.role === "string" ? "role" : null,
+    typeof body.status === "string" ? "status" : null,
+    str(body.password) ? "password" : null,
+  ].filter(Boolean);
+  await logAudit(
+    (req as any).admin.id,
+    "ADMIN_UPDATE",
+    "Admin",
+    id,
+    `changed=${changedFields.join(",")}`
+  );
   ok(res, { id: admin.id, username: admin.username, role: admin.role, status: admin.status }, "已更新");
 });
 
@@ -611,9 +623,21 @@ router.put("/password", requireAdmin, async (req, res) => {
   }
   const updated = await prisma.admin.update({
     where: { id: admin.id },
-    data: { passwordHash: bcrypt.hashSync(str(newPassword), 10), mustChangePassword: false },
+    data: {
+      passwordHash: bcrypt.hashSync(str(newPassword), 10),
+      mustChangePassword: false,
+      tokenVersion: { increment: 1 },
+    },
   });
-  ok(res, { username: updated.username, mustChangePassword: false }, "密码已修改");
+  ok(
+    res,
+    {
+      username: updated.username,
+      mustChangePassword: false,
+      token: signAdmin({ id: updated.id, role: updated.role, ver: updated.tokenVersion }),
+    },
+    "密码已修改"
+  );
 });
 
 router.post("/takeout-qrcode", requireAdmin, async (_req, res) => {

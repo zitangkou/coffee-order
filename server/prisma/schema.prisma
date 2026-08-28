@@ -17,6 +17,7 @@ model Admin {
   role               String     @default("STAFF")
   status             String     @default("ACTIVE")
   mustChangePassword Boolean    @default(false)
+  tokenVersion       Int        @default(0)
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
   refunds            Refund[]
@@ -170,6 +171,7 @@ model SmsCode {
   id        Int       @id @default(autoincrement())
   phone     String
   code      String
+  attempts  Int       @default(0)
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
