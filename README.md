@@ -78,6 +78,8 @@ npm run build:mp-weixin # 微信小程序产物 dist/build/mp-weixin
 
 项目进度、关键决策与后续待办见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**。
 
+最新发布风险与优化优先级见 **[docs/发布前全面复盘-2026-08-29.md](docs/发布前全面复盘-2026-08-29.md)**。
+
 **服务器上执行：**
 
 ```bash
