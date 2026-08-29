@@ -2,6 +2,7 @@
 node_modules/
 dist/
 server/dev.db
+server/dist-seed/
 server/uploads/
 server/.env
 .env

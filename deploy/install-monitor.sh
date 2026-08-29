@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# 每 5 分钟执行一次只读监控；失败由主机日志/云监控采集告警。
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+MONITOR_PATH="$(pwd)/deploy/monitor.sh"
+CRON_LINE="*/5 * * * * /bin/bash $MONITOR_PATH >> /var/log/coffee-monitor.log 2>&1 # coffee-order-monitor"
+
+(crontab -l 2>/dev/null | grep -v "# coffee-order-monitor" || true; echo "$CRON_LINE") | crontab -
+
+echo "已安装每 5 分钟运行监控：$MONITOR_PATH"
+echo "请在腾讯云监控或日志服务中为脚本非零退出/日志中的未通过配置告警。"

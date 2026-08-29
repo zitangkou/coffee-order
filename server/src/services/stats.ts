@@ -1,26 +1,16 @@
 import { prisma } from "../lib/prisma.js";
+import {
+  businessDateLabel,
+  businessDayRange,
+  businessHour,
+  businessRange,
+  shiftBusinessDate,
+} from "../lib/businessTime.js";
 
 const PAID_STATUSES = ["PAID", "MAKING", "READY", "COMPLETED"];
 
-function dayRange(date = new Date()) {
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(date);
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
-}
-
 function rangeFor(unit: "today" | "week" | "month") {
-  const { start, end } = dayRange();
-  if (unit === "today") return { start, end };
-  if (unit === "week") {
-    const day = (start.getDay() + 6) % 7; // Monday first
-    start.setDate(start.getDate() - day);
-  }
-  if (unit === "month") {
-    start.setDate(1);
-  }
-  return { start, end };
+  return businessRange(unit);
 }
 
 export async function paidOrdersBetween(start: Date, end: Date) {
@@ -31,7 +21,7 @@ export async function paidOrdersBetween(start: Date, end: Date) {
 }
 
 export async function todayStats() {
-  const { start, end } = dayRange();
+  const { start, end } = businessDayRange();
   const orders = await paidOrdersBetween(start, end);
   const revenue = Math.round(orders.reduce((s, o) => s + Number(o.totalAmount), 0) * 100) / 100;
   return {
@@ -84,11 +74,11 @@ export async function productRanking(unit: "today" | "week" | "month" = "today")
 }
 
 export async function hourlyDistribution(date = new Date()) {
-  const { start, end } = dayRange(date);
+  const { start, end } = businessDayRange(date);
   const orders = await paidOrdersBetween(start, end);
   const buckets = new Array(24).fill(0) as number[];
   for (const o of orders) {
-    buckets[o.createdAt.getHours()] += 1;
+    buckets[businessHour(o.createdAt)] += 1;
   }
   return buckets.map((count, hour) => ({ hour: `${String(hour).padStart(2, "0")}:00`, count }));
 }
@@ -97,12 +87,11 @@ export async function trend(days: number) {
   const result: { date: string; revenue: number; orderCount: number }[] = [];
   const today = new Date();
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const { start, end } = dayRange(d);
+    const d = shiftBusinessDate(today, -i);
+    const { start, end } = businessDayRange(d);
     const orders = await paidOrdersBetween(start, end);
     result.push({
-      date: `${d.getMonth() + 1}/${d.getDate()}`,
+      date: businessDateLabel(d),
       revenue: Math.round(orders.reduce((s, o) => s + Number(o.totalAmount), 0) * 100) / 100,
       orderCount: orders.length,
     });

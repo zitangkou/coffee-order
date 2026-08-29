@@ -35,7 +35,16 @@ else
   pass "API 仅通过内部网关访问"
 fi
 
-WEB_BIND="$(docker port coffee-web 80/tcp 2>/dev/null || true)"
+for container in coffee-server coffee-web; do
+  RUN_USER="$(docker inspect --format '{{.Config.User}}' "$container" 2>/dev/null || true)"
+  if [ -n "$RUN_USER" ] && [ "$RUN_USER" != "0" ] && [ "$RUN_USER" != "root" ] && [ "$RUN_USER" != "0:0" ]; then
+    pass "$container 配置为非 root 用户"
+  else
+    fail "$container 未配置非 root 用户"
+  fi
+done
+
+WEB_BIND="$(docker port coffee-web 8080/tcp 2>/dev/null || true)"
 if [[ "$WEB_BIND" == 127.0.0.1:* ]]; then
   pass "Web 容器仅绑定回环地址"
 else

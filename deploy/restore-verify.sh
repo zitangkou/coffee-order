@@ -13,6 +13,11 @@ BACKUP_FILE="${1:-}"
 if [ -z "$BACKUP_FILE" ]; then
   BACKUP_FILE="$(find "$BACKUP_DIR" -maxdepth 1 -type f -name 'coffee_os_*.sql.gz' -print | sort | tail -n 1)"
 fi
+
+BACKUP_NAME="${BACKUP_FILE##*/}"
+STAMP="${BACKUP_NAME#coffee_os_}"
+STAMP="${STAMP%.sql.gz}"
+UPLOAD_FILE="$BACKUP_DIR/coffee_uploads_$STAMP.tar.gz"
 if [ -z "$BACKUP_FILE" ] || [ ! -f "$BACKUP_FILE" ]; then
   echo "[restore-verify] 未找到备份文件"
   exit 1
@@ -21,6 +26,15 @@ fi
 gzip -t "$BACKUP_FILE"
 if [ -f "$BACKUP_FILE.sha256" ]; then
   sha256sum -c "$BACKUP_FILE.sha256"
+fi
+if [ ! -f "$UPLOAD_FILE" ]; then
+  echo "[restore-verify] 未找到与数据库同时间戳的上传文件备份"
+  exit 1
+fi
+gzip -t "$UPLOAD_FILE"
+tar -tzf "$UPLOAD_FILE" >/dev/null
+if [ -f "$UPLOAD_FILE.sha256" ]; then
+  sha256sum -c "$UPLOAD_FILE.sha256"
 fi
 
 VERIFY_DB="coffee_restore_verify_$(date +%Y%m%d%H%M%S)_$$"
@@ -48,4 +62,4 @@ if ! [[ "$TABLE_COUNT" =~ ^[0-9]+$ ]] || [ "$TABLE_COUNT" -lt 10 ]; then
   exit 1
 fi
 
-echo "[restore-verify] 通过：备份可恢复，临时验证库将自动删除（表数 $TABLE_COUNT）"
+echo "[restore-verify] 通过：数据库可恢复且上传文件归档可读取，临时验证库将自动删除（表数 $TABLE_COUNT）"

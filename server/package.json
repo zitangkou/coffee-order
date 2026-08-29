@@ -19,7 +19,8 @@
     "test:refund-state": "npm run build && node scripts/refund-state.mjs",
     "test:auth-safety": "npm run build && node scripts/auth-safety.mjs",
     "test:order-safety": "npm run build && node scripts/order-safety.mjs",
-    "test:payment-safety": "npm run build && node scripts/payment-safety.mjs"
+    "test:payment-safety": "npm run build && node scripts/payment-safety.mjs",
+    "test:business-time": "npm run build && node scripts/business-time-safety.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -30,6 +31,7 @@
     "express-rate-limit": "^8.6.2",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.2.0",
+    "prisma": "^5.22.0",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
@@ -40,7 +42,6 @@
     "@types/multer": "^2.2.0",
     "@types/node": "^22.10.0",
     "@types/qrcode": "^1.5.5",
-    "prisma": "^5.22.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

@@ -28,7 +28,9 @@ bash -n "$ROOT_DIR/deploy.sh" \
   "$ROOT_DIR/deploy/restore-verify.sh" \
   "$ROOT_DIR/deploy/security-check.sh" \
   "$ROOT_DIR/deploy/wechat-readiness.sh" \
-  "$ROOT_DIR/deploy/install-backup.sh"
+  "$ROOT_DIR/deploy/install-backup.sh" \
+  "$ROOT_DIR/deploy/monitor.sh" \
+  "$ROOT_DIR/deploy/install-monitor.sh"
 
 if ! rg -qx 'secrets' "$ROOT_DIR/.dockerignore" || ! rg -qx '\.env' "$ROOT_DIR/.dockerignore"; then
   echo "[release-check] ✗ Docker 构建上下文必须排除 secrets 和根环境文件"
@@ -113,6 +115,9 @@ npm --prefix "$ROOT_DIR/server" run test:order-safety
 echo "[release-check] 支付归属、幂等与待支付恢复"
 npm --prefix "$ROOT_DIR/server" run test:payment-safety
 
+echo "[release-check] 北京时间经营统计边界"
+npm --prefix "$ROOT_DIR/server" run test:business-time
+
 echo "[release-check] 生产 MySQL schema 校验"
 DATABASE_URL="mysql://schema_check:schema_check@localhost:3306/schema_check" \
   npm --prefix "$ROOT_DIR/server" exec -- prisma validate --schema "$ROOT_DIR/server/prisma/schema.mysql.prisma"
@@ -170,6 +175,23 @@ fi
 
 if rg -q 'db push|accept-data-loss' "$ROOT_DIR/Dockerfile.server"; then
   echo "[release-check] ✗ 生产容器禁止使用 db push/accept-data-loss"
+  exit 1
+fi
+
+if ! rg -q '^USER node$' "$ROOT_DIR/Dockerfile.server" || \
+   ! rg -q '^FROM nginxinc/nginx-unprivileged:' "$ROOT_DIR/Dockerfile.web"; then
+  echo "[release-check] ✗ API 与 Web 生产镜像必须配置非 root 运行"
+  exit 1
+fi
+
+if rg -q 'MYSQL_(ROOT_)?PASSWORD:-|JWT_SECRET:-' "$ROOT_DIR/docker-compose.yml"; then
+  echo "[release-check] ✗ Compose 禁止为数据库密码或 JWT 设置弱默认值"
+  exit 1
+fi
+
+if ! rg -q 'coffee_uploads_' "$ROOT_DIR/deploy/backup.sh" || \
+   [ ! -f "$ROOT_DIR/.github/workflows/ci.yml" ]; then
+  echo "[release-check] ✗ 上传文件备份或 CI 发布门禁缺失"
   exit 1
 fi
 

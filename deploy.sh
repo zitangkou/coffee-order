@@ -18,6 +18,19 @@ BASELINE_EXISTING_DB_VALUE="${BASELINE_EXISTING_DB:-$(compose_env_value BASELINE
 INITIALIZE_SEED_VALUE="${INITIALIZE_SEED:-$(compose_env_value INITIALIZE_SEED)}"
 HTTP_PORT_VALUE="${HTTP_PORT:-$(compose_env_value HTTP_PORT)}"
 RUN_SERVER_SECURITY_CHECK_VALUE="${RUN_SERVER_SECURITY_CHECK:-$(compose_env_value RUN_SERVER_SECURITY_CHECK)}"
+MYSQL_PASSWORD_VALUE="${MYSQL_PASSWORD:-$(compose_env_value MYSQL_PASSWORD)}"
+MYSQL_ROOT_PASSWORD_VALUE="${MYSQL_ROOT_PASSWORD:-$(compose_env_value MYSQL_ROOT_PASSWORD)}"
+JWT_SECRET_VALUE="${JWT_SECRET:-$(compose_env_value JWT_SECRET)}"
+
+if [[ ! "$MYSQL_PASSWORD_VALUE" =~ ^[A-Za-z0-9._~-]{24,}$ ]] || \
+   [[ ! "$MYSQL_ROOT_PASSWORD_VALUE" =~ ^[A-Za-z0-9._~-]{24,}$ ]]; then
+  echo "部署已拒绝：MySQL 密码必须至少 24 位，并仅使用 URL 安全字符"
+  exit 1
+fi
+if [ "${#JWT_SECRET_VALUE}" -lt 32 ] || [[ "$JWT_SECRET_VALUE" =~ please-change|dev-secret|coffee-os ]]; then
+  echo "部署已拒绝：JWT_SECRET 必须是至少 32 位的随机强密钥"
+  exit 1
+fi
 
 echo "=========================================="
 echo " Coffee OS 部署（方案B：内网端口 + 网关转发）"
@@ -47,7 +60,7 @@ done
 
 if [ "${INITIALIZE_SEED_VALUE:-false}" = "true" ]; then
   echo "[seed] 首次写入基础数据"
-  docker compose exec -T server npm run seed
+  docker compose exec -T server node dist-seed/seed.js
 fi
 
 echo "[5/5] 验证 API（本机内网）"

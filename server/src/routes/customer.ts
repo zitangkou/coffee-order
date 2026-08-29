@@ -27,6 +27,15 @@ const router = Router();
 
 router.get("/health", (_req, res) => ok(res, { ok: true }));
 
+router.get("/health/ready", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    ok(res, { ready: true });
+  } catch {
+    res.status(503).json({ code: 503, message: "服务暂未就绪" });
+  }
+});
+
 router.get("/categories", async (_req, res) => {
   const categories = await prisma.category.findMany({
     where: { isActive: true },

@@ -1,0 +1,36 @@
+name: release-check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: file:/tmp/coffee-order-ci.db
+      BUSINESS_TIMEZONE: Asia/Shanghai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            web/package-lock.json
+      - name: Install dependencies
+        run: |
+          npm --prefix server ci --no-audit --no-fund
+          npm --prefix web ci --no-audit --no-fund
+      - name: Initialize isolated SQLite database
+        run: |
+          touch /tmp/coffee-order-ci.db
+          npm --prefix server exec -- prisma db push --schema server/prisma/schema.prisma
+      - name: Run production release gate
+        run: PRODUCTION_RELEASE=true ./scripts/release-check.sh

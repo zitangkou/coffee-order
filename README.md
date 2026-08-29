@@ -9,7 +9,7 @@
 | 顾客端/商家端前端 | uni-app（Vue3 + TypeScript + Pinia），编译 H5 与微信小程序 |
 | 后端 | Node.js + TypeScript + Express + Prisma |
 | 数据库 | 本地开发 SQLite；生产 MySQL 8（schema 见 `server/prisma/schema.mysql.prisma`） |
-| 部署 | Nginx + PM2 + Docker Compose（MySQL） |
+| 部署 | Docker Compose（MySQL + Node.js API + Nginx） |
 
 ## 目录结构
 
@@ -70,7 +70,7 @@ npm run build:mp-weixin # 微信小程序产物 dist/build/mp-weixin
 
 ## 生产部署（Docker 一键方案，推荐）
 
-腾讯云 4核4G 完全够用。仓库根目录已提供完整 Docker 化部署（MySQL + 后端 + 前端 Nginx 三个容器）。
+腾讯云 4核4G 可支撑首发阶段。仓库根目录已提供完整 Docker 化部署（MySQL + 非 root API + 非 root 前端 Nginx，并带备份、恢复校验和监控脚本）。
 
 完整图文步骤见 **[docs/部署指南.md](docs/部署指南.md)**（Ubuntu 22.04 + 安装 Docker + 部署 + HTTPS + 安全 + 运维）。
 
@@ -92,8 +92,8 @@ cp deploy/.env.example .env      # 按需修改密码、WEB_BASE_URL、端口等
 
 完成后访问：
 
-- 顾客端：`http://<服务器IP>:80/#/pages/index/index`
-- 商家后台：`http://<服务器IP>:80/#/pages_admin/login/index`（`admin / admin123`）
+- 公网 API/图片：由宿主机 Nginx 通过 `https://nagacoffee.site` 转发
+- 商家后台：`https://nagacoffee.site/#/pages_admin/login/index`（首次登录后立即修改初始密码）
 
 **说明**
 
@@ -101,6 +101,7 @@ cp deploy/.env.example .env      # 按需修改密码、WEB_BASE_URL、端口等
 - 腾讯云服务器若拉镜像慢，在 `.env` 里加 `DOCKER_MIRROR=mirror.ccs.tencentyun.com` 再执行 `./deploy.sh`。
 - 桌码地址由 `WEB_BASE_URL` 控制，部署后先在商家后台「桌台管理」重新生成桌码再打印。
 - 常用运维：`docker compose logs -f server`、`docker compose restart`、`git pull && docker compose up -d --build`。
+- 数据库与上传文件每日备份、每周恢复验证和运行监控分别由 `deploy/install-backup.sh`、`deploy/install-monitor.sh` 安装。
 
 ### 备选：传统部署（不使用 Docker）
 
