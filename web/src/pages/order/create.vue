@@ -57,7 +57,9 @@
       </view>
     </view>
 
-    <view class="submit btn-primary" @tap="submit">提交订单</view>
+    <view class="submit btn-primary" :class="{ disabled: isSubmitting }" @tap="submit">
+      {{ isSubmitting ? "提交中…" : "提交订单" }}
+    </view>
 
     <view v-if="showTablePicker" class="mask" @tap="showTablePicker = false">
       <view class="sheet" @tap.stop>
@@ -95,6 +97,8 @@ const tables = ref<Table[]>([]);
 const phone = ref("");
 const showTablePicker = ref(false);
 const shop = ref<any>(null);
+const isSubmitting = ref(false);
+const clientRequestId = ref("");
 
 const packFee = computed(() => {
   if (user.orderType === "TAKEOUT") return shop.value?.packFee || 0;
@@ -132,6 +136,7 @@ function specsText(specs: Record<string, string | string[]>) {
 }
 
 async function submit() {
+  if (isSubmitting.value) return;
   if (!cart.items.length) {
     uni.showToast({ title: "购物车是空的", icon: "none" });
     return;
@@ -145,8 +150,13 @@ async function submit() {
     return;
   }
   try {
+    isSubmitting.value = true;
+    if (!clientRequestId.value) {
+      clientRequestId.value = `ord_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+    }
     uni.showLoading({ title: "提交中" });
     const order = await api.createOrder({
+      clientRequestId: clientRequestId.value,
       tableId: user.orderType === "DINE_IN" ? user.tableId || undefined : undefined,
       orderType: user.orderType,
       items: cart.items.map((i) => ({
@@ -188,6 +198,8 @@ async function submit() {
   } catch (e: any) {
     uni.hideLoading();
     uni.showToast({ title: e.message || "下单失败", icon: "none" });
+  } finally {
+    isSubmitting.value = false;
   }
 }
 

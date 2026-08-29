@@ -17,7 +17,8 @@
     "security": "npm run build && node scripts/security.mjs",
     "readiness:wechat": "npm run build && node scripts/wechat-readiness.mjs",
     "test:refund-state": "npm run build && node scripts/refund-state.mjs",
-    "test:auth-safety": "npm run build && node scripts/auth-safety.mjs"
+    "test:auth-safety": "npm run build && node scripts/auth-safety.mjs",
+    "test:order-safety": "npm run build && node scripts/order-safety.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

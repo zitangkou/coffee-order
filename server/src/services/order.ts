@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { genOrderNo, genPickupNo } from "../lib/ids.js";
+import { genOrderNo, nextPickupIdentity } from "../lib/ids.js";
 import { stringifyJson } from "../lib/json.js";
 import { prisma } from "../lib/prisma.js";
 import { calcUnitPrice, type SpecValue } from "./price.js";
@@ -26,6 +26,7 @@ export type OrderType = "DINE_IN" | "TAKEOUT";
 
 export interface CreateOrderInput {
   userId?: number;
+  clientRequestId?: string;
   tableId?: number;
   orderType: OrderType;
   items: { productId: number; quantity: number; specs: Record<string, SpecValue> }[];
@@ -40,8 +41,19 @@ const orderInclude = {
   refunds: true,
 } satisfies Prisma.OrderInclude;
 
-export async function createOrder(input: CreateOrderInput) {
+async function createOrderInternal(input: CreateOrderInput) {
   if (!input.userId) throw new Error("请先登录");
+  const clientRequestId = String(input.clientRequestId || "").trim();
+  if (clientRequestId && !/^[A-Za-z0-9_-]{8,64}$/.test(clientRequestId)) {
+    throw new Error("下单幂等标识格式不正确");
+  }
+  if (clientRequestId) {
+    const existing = await prisma.order.findUnique({
+      where: { userId_clientRequestId: { userId: input.userId, clientRequestId } },
+      include: orderInclude,
+    });
+    if (existing) return existing;
+  }
   if (!Array.isArray(input.items) || input.items.length === 0) throw new Error("订单至少需要一件商品");
   if (input.items.length > 50) throw new Error("单笔订单商品种类过多");
   for (const item of input.items) {
@@ -130,22 +142,54 @@ export async function createOrder(input: CreateOrderInput) {
     tableId = null;
   }
 
-  return prisma.order.create({
-    data: {
-      orderNo: genOrderNo(),
-      pickupNo: await genPickupNo(),
-      userId: input.userId ?? null,
-      tableId,
-      orderType: input.orderType,
-      status: "UNPAID",
-      totalAmount,
-      packFee,
-      remark: input.remark || null,
-      phone: input.phone || null,
-      items: { create: items },
-    },
-    include: orderInclude,
-  });
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const pickup = await nextPickupIdentity(tx);
+      return tx.order.create({
+        data: {
+          orderNo: genOrderNo(),
+          ...pickup,
+          clientRequestId: clientRequestId || null,
+          userId: input.userId ?? null,
+          tableId,
+          orderType: input.orderType,
+          status: "UNPAID",
+          totalAmount,
+          packFee,
+          remark: input.remark || null,
+          phone: input.phone || null,
+          items: { create: items },
+        },
+        include: orderInclude,
+      });
+    });
+  } catch (error: any) {
+    if (error?.code === "P2002" && clientRequestId) {
+      const existing = await prisma.order.findUnique({
+        where: { userId_clientRequestId: { userId: input.userId, clientRequestId } },
+        include: orderInclude,
+      });
+      if (existing) return existing;
+    }
+    throw error;
+  }
+}
+
+const pendingOrderCreates = new Map<string, Promise<any>>();
+
+export async function createOrder(input: CreateOrderInput) {
+  const clientRequestId = String(input.clientRequestId || "").trim();
+  const key = input.userId && clientRequestId ? `${input.userId}:${clientRequestId}` : "";
+  if (!key) return createOrderInternal(input);
+  const pending = pendingOrderCreates.get(key);
+  if (pending) return pending;
+  const request = createOrderInternal(input);
+  pendingOrderCreates.set(key, request);
+  try {
+    return await request;
+  } finally {
+    if (pendingOrderCreates.get(key) === request) pendingOrderCreates.delete(key);
+  }
 }
 
 export async function mockPay(orderId: number, userId?: number) {

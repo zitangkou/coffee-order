@@ -209,29 +209,39 @@ model SmsCode {
 }
 
 model Order {
-  id          Int         @id @default(autoincrement())
-  orderNo     String      @unique @db.VarChar(32)
-  pickupNo    String      @db.VarChar(10)
-  userId      Int?
-  user        User?       @relation(fields: [userId], references: [id])
-  tableId     Int?
-  table       TableInfo?  @relation(fields: [tableId], references: [id])
-  orderType   OrderType   @default(DINE_IN)
-  status      OrderStatus @default(UNPAID)
-  totalAmount Decimal     @db.Decimal(10, 2)
-  packFee     Decimal     @default(0) @db.Decimal(10, 2)
-  remark      String?     @db.VarChar(255)
-  phone       String?     @db.VarChar(20)
-  payType     PayType     @default(WECHAT)
-  paidAt      DateTime?
-  refundedAt  DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  items       OrderItem[]
-  payments    Payment[]
-  refunds     Refund[]
+  id              Int         @id @default(autoincrement())
+  orderNo         String      @unique @db.VarChar(32)
+  pickupNo        String      @db.VarChar(10)
+  pickupKey       String?     @unique @db.VarChar(32)
+  businessDate    String?     @db.Char(8)
+  clientRequestId String?     @db.VarChar(64)
+  userId          Int?
+  user            User?       @relation(fields: [userId], references: [id])
+  tableId         Int?
+  table           TableInfo?  @relation(fields: [tableId], references: [id])
+  orderType       OrderType   @default(DINE_IN)
+  status          OrderStatus @default(UNPAID)
+  totalAmount     Decimal     @db.Decimal(10, 2)
+  packFee         Decimal     @default(0) @db.Decimal(10, 2)
+  remark          String?     @db.VarChar(255)
+  phone           String?     @db.VarChar(20)
+  payType         PayType     @default(WECHAT)
+  paidAt          DateTime?
+  refundedAt      DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  items           OrderItem[]
+  payments        Payment[]
+  refunds         Refund[]
 
+  @@unique([userId, clientRequestId])
   @@index([status, createdAt])
+}
+
+model DailySequence {
+  businessDate String   @id @db.Char(8)
+  pickupValue  Int      @default(0)
+  updatedAt    DateTime @updatedAt
 }
 
 model OrderItem {

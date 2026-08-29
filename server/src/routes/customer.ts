@@ -241,6 +241,7 @@ router.post("/orders", orderLimiter(), requireUser, async (req, res) => {
   try {
     const order = await createOrder({
       userId,
+      clientRequestId: str(body.clientRequestId),
       tableId: body.tableId ? num(body.tableId) : undefined,
       orderType: body.orderType === "TAKEOUT" ? "TAKEOUT" : "DINE_IN",
       items: Array.isArray(body.items) ? body.items : [],

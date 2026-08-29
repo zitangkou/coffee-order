@@ -43,6 +43,7 @@ services:
       DATABASE_URL: mysql://coffee:${MYSQL_PASSWORD:-coffee123}@mysql:3306/coffee_os
       JWT_SECRET: ${JWT_SECRET:-please-change-me-in-production}
       PORT: 3000
+      BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Asia/Shanghai}
       WEB_BASE_URL: ${WEB_BASE_URL:-http://localhost}
       MOCK_PAYMENT: ${MOCK_PAYMENT:-false}
       PRINTER_ENABLED: ${PRINTER_ENABLED:-false}

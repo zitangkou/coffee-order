@@ -180,29 +180,39 @@ model SmsCode {
 }
 
 model Order {
-  id          Int         @id @default(autoincrement())
-  orderNo     String      @unique
-  pickupNo    String
-  userId      Int?
-  user        User?       @relation(fields: [userId], references: [id])
-  tableId     Int?
-  table       TableInfo?  @relation(fields: [tableId], references: [id])
-  orderType   String      @default("DINE_IN")
-  status      String      @default("UNPAID")
-  totalAmount Float
-  packFee     Float       @default(0)
-  remark      String?
-  phone       String?
-  payType     String      @default("WECHAT")
-  paidAt      DateTime?
-  refundedAt  DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  items       OrderItem[]
-  payments    Payment[]
-  refunds     Refund[]
+  id              Int         @id @default(autoincrement())
+  orderNo         String      @unique
+  pickupNo        String
+  pickupKey       String?     @unique
+  businessDate    String?
+  clientRequestId String?
+  userId          Int?
+  user            User?       @relation(fields: [userId], references: [id])
+  tableId         Int?
+  table           TableInfo?  @relation(fields: [tableId], references: [id])
+  orderType       String      @default("DINE_IN")
+  status          String      @default("UNPAID")
+  totalAmount     Float
+  packFee         Float       @default(0)
+  remark          String?
+  phone           String?
+  payType         String      @default("WECHAT")
+  paidAt          DateTime?
+  refundedAt      DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  items           OrderItem[]
+  payments        Payment[]
+  refunds         Refund[]
 
+  @@unique([userId, clientRequestId])
   @@index([status, createdAt])
+}
+
+model DailySequence {
+  businessDate String   @id
+  pickupValue  Int      @default(0)
+  updatedAt    DateTime @updatedAt
 }
 
 model OrderItem {

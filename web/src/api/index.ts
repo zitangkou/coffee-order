@@ -33,6 +33,7 @@ export const api = {
   deactivateUser: () =>
     request<any>({ url: "/user/deactivate", method: "POST", data: { confirm: "确认注销" } }),
   createOrder: (data: {
+    clientRequestId: string;
     tableId?: number;
     orderType: "DINE_IN" | "TAKEOUT";
     items: { productId: number; quantity: number; specs: Record<string, string | string[]> }[];
