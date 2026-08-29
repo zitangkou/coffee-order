@@ -195,10 +195,21 @@ router.post("/user/subscribe", requireUser, async (req, res) => {
   if (!userId) return fail(res, "请先登录");
   const templateId = str(req.body?.templateId, "").trim();
   if (!templateId) return fail(res, "缺少模板ID");
+  const configuredTemplate = String(process.env.WECHAT_SUBSCRIBE_TEMPLATE_READY || "");
+  if (
+    process.env.NODE_ENV === "production" &&
+    (!configuredTemplate || templateId !== configuredTemplate)
+  ) {
+    return fail(res, "订阅模板不可用");
+  }
+  const status = str(req.body?.status, "").trim();
+  if (!["ACCEPTED", "REJECTED", "BANNED"].includes(status)) {
+    return fail(res, "订阅授权状态无效");
+  }
   await prisma.userSubscribe.upsert({
     where: { userId_templateId: { userId, templateId } },
-    update: { status: "ACCEPTED" },
-    create: { userId, templateId, status: "ACCEPTED" },
+    update: { status },
+    create: { userId, templateId, status },
   });
   ok(res, null, "订阅已保存");
 });

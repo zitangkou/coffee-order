@@ -221,7 +221,7 @@ async function main() {
     await call("/user/subscribe", {
       method: "POST",
       token: globalThis.userToken,
-      body: { templateId: "SMOKE_TEMPLATE" },
+      body: { templateId: "SMOKE_TEMPLATE", status: "ACCEPTED" },
     });
   });
 

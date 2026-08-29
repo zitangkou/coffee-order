@@ -37,3 +37,13 @@ export const STORAGE_KEYS = {
 // 微信订阅消息模板通过私密构建环境注入，不提交到仓库；未配置时跳过订阅引导。
 export const WX_SUBSCRIBE_TEMPLATE_READY: string =
   import.meta.env.VITE_WX_SUBSCRIBE_TEMPLATE_READY || "";
+
+// 以下均为会公开展示在小程序内的经营者信息，不应放置任何密钥或证书内容。
+export const LEGAL_OPERATOR_NAME: string =
+  import.meta.env.VITE_LEGAL_OPERATOR_NAME || "待经营者确认";
+export const LEGAL_CUSTOMER_SERVICE: string =
+  import.meta.env.VITE_LEGAL_CUSTOMER_SERVICE || "待经营者确认";
+export const LEGAL_STORE_ADDRESS: string =
+  import.meta.env.VITE_LEGAL_STORE_ADDRESS || "待经营者确认";
+export const LEGAL_DATA_RETENTION: string =
+  import.meta.env.VITE_LEGAL_DATA_RETENTION || "待经营者确认";

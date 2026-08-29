@@ -47,8 +47,8 @@ export const api = {
     request<Order>({ url: `/orders/${id}/payment-status`, method: "POST" }),
   cancelOrder: (id: number) =>
     request<Order>({ url: `/orders/${id}/cancel`, method: "POST" }),
-  saveSubscribe: (templateId: string) =>
-    request<any>({ url: "/user/subscribe", method: "POST", data: { templateId } }),
+  saveSubscribe: (templateId: string, status: "ACCEPTED" | "REJECTED" | "BANNED") =>
+    request<any>({ url: "/user/subscribe", method: "POST", data: { templateId, status } }),
   myOrders: () => request<Order[]>({ url: "/orders/my" }),
   getOrder: (id: number) => request<Order>({ url: `/orders/${id}` }),
   requestRefund: (id: number, reason: string) =>

@@ -40,18 +40,25 @@ export function requestPayment(params: Record<string, string>): Promise<boolean>
   });
 }
 
-// 订阅消息：请求用户授权，返回是否同意
-export function subscribeMessage(templateId: string): Promise<boolean> {
+export type SubscribeResult = "ACCEPTED" | "REJECTED" | "BANNED" | "ERROR";
+
+// 必须由用户点击直接调用；完整返回授权结果，便于服务端记录拒绝/禁用状态。
+export function subscribeMessage(templateId: string): Promise<SubscribeResult> {
   return new Promise((resolve) => {
     // #ifdef MP-WEIXIN
     uni.requestSubscribeMessage({
       tmplIds: [templateId],
-      success: (res) => resolve((res as any)[templateId] === "accept"),
-      fail: () => resolve(false),
+      success: (res) => {
+        const status = (res as any)[templateId];
+        if (status === "accept") return resolve("ACCEPTED");
+        if (status === "ban") return resolve("BANNED");
+        resolve("REJECTED");
+      },
+      fail: () => resolve("ERROR"),
     });
     // #endif
     // #ifndef MP-WEIXIN
-    resolve(false);
+    resolve("ERROR");
     // #endif
   });
 }

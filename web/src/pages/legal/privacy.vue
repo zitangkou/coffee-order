@@ -1,7 +1,14 @@
 <template>
   <view class="legal-page">
     <view class="title">Coffee OS 隐私政策</view>
-    <view class="meta">更新日期：2026 年 8 月 22 日</view>
+    <view class="meta">更新日期：2026 年 8 月 29 日</view>
+
+    <view class="section">
+      <view class="heading">经营者与联系方式</view>
+      <view class="paragraph">经营者：{{ LEGAL_OPERATOR_NAME }}</view>
+      <view class="paragraph">客服联系渠道：{{ LEGAL_CUSTOMER_SERVICE }}</view>
+      <view class="paragraph">经营地址：{{ LEGAL_STORE_ADDRESS }}</view>
+    </view>
 
     <view class="section">
       <view class="heading">我们处理的信息</view>
@@ -17,15 +24,28 @@
     </view>
     <view class="section">
       <view class="heading">保存与保护</view>
-      <view class="paragraph">我们仅在提供服务、处理售后及履行适用法律义务所需期限内保存信息，并采取访问控制、传输加密、日志脱敏和备份等措施保护数据。</view>
+      <view class="paragraph">一般业务信息保存期限：{{ LEGAL_DATA_RETENTION }}。超过期限后将删除或匿名化；法律法规另有要求的交易记录按法定期限保存。我们采取访问控制、传输加密、日志脱敏和备份等措施保护数据。</view>
+    </view>
+    <view class="section">
+      <view class="heading">第三方处理</view>
+      <view class="paragraph">登录、支付、退款与订阅通知由微信相关能力处理，必要的订单号、金额和支付状态会在完成对应服务所需范围内传输。我们不会出售个人信息，也不会将信息用于无关营销。</view>
     </view>
     <view class="section">
       <view class="heading">你的权利</view>
       <view class="paragraph">你可以在咖啡档案中查看已绑定手机号和消费记录，并可联系店铺申请更正、解绑或注销账号。涉及支付、退款和依法需要留存的交易记录，注销后将停止用于会员识别，并按适用要求进行删除或匿名化处理。</view>
     </view>
-    <view class="notice">正式提审前，请在商家后台补充经营主体、客服联系渠道、实际保存期限，并确保本政策与微信公众平台填写的隐私保护指引一致。</view>
+    <view class="notice">如需行使查阅、更正、删除或注销权利，请通过上述客服渠道联系我们。小程序内说明与微信公众平台隐私保护指引应保持一致。</view>
   </view>
 </template>
+
+<script setup lang="ts">
+import {
+  LEGAL_CUSTOMER_SERVICE,
+  LEGAL_DATA_RETENTION,
+  LEGAL_OPERATOR_NAME,
+  LEGAL_STORE_ADDRESS,
+} from "../../config";
+</script>
 
 <style lang="scss" scoped>
 .legal-page { min-height: 100vh; padding: 40rpx 32rpx 80rpx; box-sizing: border-box; background: #f7f4f0; color: #352f2a; }
