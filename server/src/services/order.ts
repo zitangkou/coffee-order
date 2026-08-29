@@ -203,15 +203,16 @@ export async function mockPay(orderId: number, userId?: number) {
   if (!order.userId || order.userId !== userId) {
     throw new Error("无权操作该订单");
   }
-  await prisma.$transaction([
-    prisma.payment.create({
-      data: { orderId, amount: order.totalAmount, channel: "MOCK", status: "SUCCESS" },
-    }),
-    prisma.order.update({
-      where: { id: orderId },
+  await prisma.$transaction(async (tx) => {
+    const claimed = await tx.order.updateMany({
+      where: { id: orderId, status: "UNPAID" },
       data: { status: "PAID", paidAt: new Date() },
-    }),
-  ]);
+    });
+    if (claimed.count !== 1) throw new Error("订单状态已变化，请刷新后重试");
+    await tx.payment.create({
+      data: { orderId, amount: order.totalAmount, channel: "MOCK", status: "SUCCESS" },
+    });
+  });
   const updated = await prisma.order.findUnique({
     where: { id: orderId },
     include: orderInclude,
@@ -279,6 +280,21 @@ export async function transitionOrder(orderId: number, status: OrderStatus) {
     );
   }
   return result;
+}
+
+export async function cancelUnpaidOrder(orderId: number, userId: number) {
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) throw new Error("订单不存在");
+  if (!order.userId || order.userId !== userId) throw new Error("无权操作该订单");
+  if (order.status !== "UNPAID") throw new Error("当前订单不可取消");
+  const closed = await closeUnpaidWechatOrder(order.orderNo);
+  if (!closed) throw new Error("订单已支付，不能取消");
+  const updated = await prisma.order.updateMany({
+    where: { id: order.id, userId, status: "UNPAID" },
+    data: { status: "CANCELLED" },
+  });
+  if (updated.count !== 1) throw new Error("订单状态已变化，请刷新后重试");
+  return prisma.order.findUnique({ where: { id: order.id }, include: orderInclude });
 }
 
 export async function requestRefund(

@@ -232,7 +232,7 @@ model OrderItem {
 
 model Payment {
   id            Int      @id @default(autoincrement())
-  orderId       Int
+  orderId       Int      @unique
   order         Order    @relation(fields: [orderId], references: [id])
   transactionId String?  @unique
   amount        Float

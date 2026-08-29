@@ -6,7 +6,13 @@ import { fail, ok } from "../lib/response.js";
 import { signUser } from "../lib/jwt.js";
 import { serializeOrder, serializeProduct } from "../lib/json.js";
 import { requireUser } from "../middleware/auth.js";
-import { createOrder, mockPay, requestRefund, wechatPay } from "../services/order.js";
+import {
+  cancelUnpaidOrder,
+  createOrder,
+  mockPay,
+  requestRefund,
+  wechatPay,
+} from "../services/order.js";
 import {
   confirmWechatPayment,
   handlePaymentCallback,
@@ -307,6 +313,15 @@ router.post("/orders/:id/payment-status", paymentLimiter(), requireUser, async (
     ok(res, serializeOrder(latest));
   } catch (e: any) {
     fail(res, e?.message || "支付状态查询失败");
+  }
+});
+
+router.post("/orders/:id/cancel", paymentLimiter(), requireUser, async (req, res) => {
+  try {
+    const order = await cancelUnpaidOrder(num(req.params.id), (req as any).userId);
+    ok(res, serializeOrder(order), "订单已取消");
+  } catch (e: any) {
+    fail(res, e?.message || "取消订单失败");
   }
 });
 

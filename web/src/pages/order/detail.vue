@@ -36,6 +36,17 @@
       申请退款
     </view>
 
+    <view v-if="order?.status === 'UNPAID'" class="payment-actions">
+      <!-- #ifdef MP-WEIXIN -->
+      <view class="btn-primary action-btn" :class="{ disabled: paying }" @tap="retryPayment">
+        {{ paying ? "支付确认中…" : "继续支付" }}
+      </view>
+      <!-- #endif -->
+      <view class="btn-outline action-btn" :class="{ disabled: cancelling }" @tap="cancelOrder">
+        {{ cancelling ? "取消中…" : "取消订单" }}
+      </view>
+    </view>
+
     <view v-if="order?.refunds?.length" class="card">
       <view class="spec-name">退款记录</view>
       <view class="o-row" v-for="r in order.refunds" :key="r.id">
@@ -70,9 +81,14 @@ import { onLoad, onUnload } from "@dcloudio/uni-app";
 import { api } from "../../api";
 import { ORDER_STATUS_TEXT, type Order, type OrderStatus } from "../../types";
 import StepBar from "../../components/StepBar.vue";
+// #ifdef MP-WEIXIN
+import { requestPayment } from "../../utils/platform";
+// #endif
 
 const order = ref<Order | null>(null);
 const showRefund = ref(false);
+const paying = ref(false);
+const cancelling = ref(false);
 
 function refundStatusText(status: string) {
   return ({
@@ -184,6 +200,52 @@ async function submitRefund() {
     uni.showToast({ title: e.message || "申请失败", icon: "none" });
   }
 }
+
+async function retryPayment() {
+  if (!order.value || paying.value) return;
+  const orderId = order.value.id;
+  paying.value = true;
+  try {
+    const payRes = await api.payOrder(orderId);
+    if (!payRes.payParams) throw new Error("未获得支付参数");
+    // #ifdef MP-WEIXIN
+    const accepted = await requestPayment(payRes.payParams);
+    if (!accepted) throw new Error("支付已取消");
+    // #endif
+    for (let i = 0; i < 12; i += 1) {
+      const latest: Order = await api.confirmPayment(orderId);
+      order.value = latest;
+      if (["PAID", "MAKING", "READY", "COMPLETED"].includes(latest.status)) {
+        uni.showToast({ title: "支付成功", icon: "success" });
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    throw new Error("支付结果确认中，请稍后刷新订单");
+  } catch (e: any) {
+    uni.showToast({ title: e.message || "支付失败", icon: "none" });
+  } finally {
+    paying.value = false;
+  }
+}
+
+async function cancelOrder() {
+  if (!order.value || cancelling.value) return;
+  cancelling.value = true;
+  try {
+    order.value = await api.cancelOrder(order.value.id);
+    uni.showToast({ title: "订单已取消", icon: "success" });
+  } catch (e: any) {
+    uni.showToast({ title: e.message || "取消失败", icon: "none" });
+    try {
+      order.value = await api.getOrder(order.value.id);
+    } catch {
+      // 保留当前页面状态，用户可稍后下拉或返回列表刷新。
+    }
+  } finally {
+    cancelling.value = false;
+  }
+}
 </script>
 
 <style lang="scss" scoped>
@@ -245,6 +307,17 @@ async function submitRefund() {
 
 .refund-btn {
   margin: 24rpx 0;
+}
+
+.payment-actions {
+  display: flex;
+  gap: 16rpx;
+  margin: 24rpx 0;
+}
+
+.action-btn {
+  flex: 1;
+  text-align: center;
 }
 
 .mask {

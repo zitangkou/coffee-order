@@ -76,6 +76,9 @@ npm --prefix "$ROOT_DIR/server" run test:auth-safety
 echo "[release-check] 下单幂等与取餐码"
 npm --prefix "$ROOT_DIR/server" run test:order-safety
 
+echo "[release-check] 支付归属、幂等与待支付恢复"
+npm --prefix "$ROOT_DIR/server" run test:payment-safety
+
 echo "[release-check] 生产 MySQL schema 校验"
 DATABASE_URL="mysql://schema_check:schema_check@localhost:3306/schema_check" \
   npm --prefix "$ROOT_DIR/server" exec -- prisma validate --schema "$ROOT_DIR/server/prisma/schema.mysql.prisma"

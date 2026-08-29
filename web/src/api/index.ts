@@ -45,6 +45,8 @@ export const api = {
     request<any>({ url: `/orders/${id}/pay`, method: "POST" }),
   confirmPayment: (id: number) =>
     request<Order>({ url: `/orders/${id}/payment-status`, method: "POST" }),
+  cancelOrder: (id: number) =>
+    request<Order>({ url: `/orders/${id}/cancel`, method: "POST" }),
   saveSubscribe: (templateId: string) =>
     request<any>({ url: "/user/subscribe", method: "POST", data: { templateId } }),
   myOrders: () => request<Order[]>({ url: "/orders/my" }),
