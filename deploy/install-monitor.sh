@@ -4,7 +4,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 MONITOR_PATH="$(pwd)/deploy/monitor.sh"
-CRON_LINE="*/5 * * * * /bin/bash $MONITOR_PATH >> /var/log/coffee-monitor.log 2>&1 # coffee-order-monitor"
+LOG_DIR="$(pwd)/var/log"
+mkdir -p "$LOG_DIR"
+CRON_LINE="*/5 * * * * /bin/bash $MONITOR_PATH >> $LOG_DIR/monitor.log 2>&1 # coffee-order-monitor"
 
 (crontab -l 2>/dev/null | grep -v "# coffee-order-monitor" || true; echo "$CRON_LINE") | crontab -
 

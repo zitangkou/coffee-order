@@ -46,7 +46,7 @@ npm run seed            # 写入默认管理员/分类/商品/桌台
 npm run dev             # http://localhost:3000
 ```
 
-默认商家账号：`admin / admin123`
+本地开发默认商家账号：`admin / admin123`。生产部署会随机生成一次性管理员密码，不使用该默认值。
 
 ### 2. 启动前端 H5
 
@@ -86,8 +86,7 @@ npm run build:mp-weixin # 微信小程序产物 dist/build/mp-weixin
 
 ```bash
 git clone git@github.com:zitangkou/coffee-order.git && cd coffee-order
-cp deploy/.env.example .env      # 按需修改密码、WEB_BASE_URL、端口等
-./deploy.sh                      # 构建并启动全部服务
+./deploy.sh                      # 自动生成安全配置、安装 Docker、构建并启动
 ```
 
 完成后访问：
@@ -97,10 +96,12 @@ cp deploy/.env.example .env      # 按需修改密码、WEB_BASE_URL、端口等
 
 **说明**
 
-- 部署脚本应用版本化数据库迁移并做健康检查；全新环境通过 `INITIALIZE_SEED=true` 显式写入初始数据。
+- 部署脚本会自动生成强密钥、应用版本化 migration、初始化数据、验证 readiness，并安装备份与监控任务。
+- DNS 和证书邮箱准备好后执行 `./deploy.sh --with-https`，可同时完成宿主机 Nginx 与 Let's Encrypt。
+- 初始管理员凭据只保存在服务器 `var/initial-admin-credentials.txt`，首次改密后应删除。
 - 腾讯云服务器若拉镜像慢，在 `.env` 里加 `DOCKER_MIRROR=mirror.ccs.tencentyun.com` 再执行 `./deploy.sh`。
 - 桌码地址由 `WEB_BASE_URL` 控制，部署后先在商家后台「桌台管理」重新生成桌码再打印。
-- 常用运维：`docker compose logs -f server`、`docker compose restart`、`git pull && docker compose up -d --build`。
+- 常用运维：`docker compose logs -f server`、`docker compose restart`、`git pull && ./deploy.sh`。
 - 数据库与上传文件每日备份、每周恢复验证和运行监控分别由 `deploy/install-backup.sh`、`deploy/install-monitor.sh` 安装。
 
 ### 备选：传统部署（不使用 Docker）

@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # 将备份恢复到一次性临时库并验证，绝不覆盖 coffee_os 生产库。
 set -euo pipefail
-cd "$(dirname "$0")/.."
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT_DIR"
 
 compose_env_value() {
   docker compose config --environment | awk -F= -v key="$1" '$1 == key { sub(/^[^=]*=/, ""); print; exit }'
 }
 
 BACKUP_DIR="${BACKUP_DIR:-$(compose_env_value BACKUP_DIR)}"
-BACKUP_DIR="${BACKUP_DIR:-/opt/backups}"
+BACKUP_DIR="${BACKUP_DIR:-$ROOT_DIR/var/backups}"
 BACKUP_FILE="${1:-}"
 if [ -z "$BACKUP_FILE" ]; then
   BACKUP_FILE="$(find "$BACKUP_DIR" -maxdepth 1 -type f -name 'coffee_os_*.sql.gz' -print | sort | tail -n 1)"

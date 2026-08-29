@@ -4,6 +4,7 @@ dist/
 server/dev.db
 server/dist-seed/
 server/uploads/
+var/
 server/.env
 .env
 .env.local

@@ -1,4 +1,6 @@
 // 不依赖微信或短信凭据，验证管理员令牌失效、服务端强制改密及生产游客/短信关闭。
+import "dotenv/config";
+
 process.env.NODE_ENV = "production";
 process.env.JWT_SECRET = "auth-safety-test-secret-at-least-32-characters";
 process.env.SMS_PROVIDER = "disabled";

@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 # 只读运行监控：容器健康、数据库就绪、公网 HTTPS、磁盘和备份新鲜度。
 set -euo pipefail
-cd "$(dirname "$0")/.."
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT_DIR"
 
+compose_env_value() {
+  docker compose config --environment | awk -F= -v key="$1" '$1 == key { sub(/^[^=]*=/, ""); print; exit }'
+}
+
+PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-$(compose_env_value WEB_BASE_URL)}"
 PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-https://nagacoffee.site}"
-BACKUP_DIR="${BACKUP_DIR:-/opt/backups}"
+BACKUP_DIR="${BACKUP_DIR:-$(compose_env_value BACKUP_DIR)}"
+BACKUP_DIR="${BACKUP_DIR:-$ROOT_DIR/var/backups}"
 failures=0
 
 pass() { echo "[monitor] ✓ $1"; }

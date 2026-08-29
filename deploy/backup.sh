@@ -2,14 +2,15 @@
 # Coffee OS 自动备份脚本：MySQL + 上传文件 + 校验和 + 保留 N 天
 # 用法：bash deploy/backup.sh（可放入 crontab，见 deploy/install-backup.sh）
 set -euo pipefail
-cd "$(dirname "$0")/.."
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT_DIR"
 
 compose_env_value() {
   docker compose config --environment | awk -F= -v key="$1" '$1 == key { sub(/^[^=]*=/, ""); print; exit }'
 }
 
 BACKUP_DIR="${BACKUP_DIR:-$(compose_env_value BACKUP_DIR)}"
-BACKUP_DIR="${BACKUP_DIR:-/opt/backups}"
+BACKUP_DIR="${BACKUP_DIR:-$ROOT_DIR/var/backups}"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-$(compose_env_value BACKUP_RETENTION_DAYS)}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 STAMP="$(date +%Y%m%d_%H%M%S)"

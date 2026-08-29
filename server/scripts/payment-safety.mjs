@@ -1,4 +1,6 @@
 // 不读取真实微信凭据，验证支付归属、幂等、单订单单支付和待支付订单取消。
+import "dotenv/config";
+
 process.env.WECHAT_MP_APPID = "wx_payment_safety_test";
 process.env.WECHAT_MCH_ID = "1900000001";
 process.env.PRINTER_ENABLED = "false";

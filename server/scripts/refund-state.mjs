@@ -1,4 +1,6 @@
 // 不依赖微信凭据，验证退款处理中/失败/成功的数据库状态机。
+import "dotenv/config";
+
 const { prisma } = await import("../dist/lib/prisma.js");
 const { confirmWechatRefund } = await import("../dist/services/payment.js");
 const { requestRefund } = await import("../dist/services/order.js");

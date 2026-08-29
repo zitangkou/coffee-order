@@ -3,6 +3,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+compose_env_value() {
+  docker compose config --environment | awk -F= -v key="$1" '$1 == key { sub(/^[^=]*=/, ""); print; exit }'
+}
+
+PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-$(compose_env_value WEB_BASE_URL)}"
 PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-https://nagacoffee.site}"
 failures=0
 

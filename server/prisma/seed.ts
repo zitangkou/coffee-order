@@ -111,14 +111,25 @@ async function ensureSpecGroups() {
 }
 
 async function main() {
-  const passwordHash = bcrypt.hashSync("admin123", 10);
-  const admin = await prisma.admin.upsert({
-    where: { username: "admin" },
-    update: {},
-    create: { username: "admin", passwordHash, role: "MANAGER", mustChangePassword: true },
-  });
+  const existingAdmin = await prisma.admin.findUnique({ where: { username: "admin" } });
+  const initialPassword =
+    process.env.INITIAL_ADMIN_PASSWORD ||
+    (process.env.NODE_ENV === "production" ? "" : "admin123");
+  if (!existingAdmin && initialPassword.length < 12) {
+    throw new Error("生产初始化必须提供至少 12 位的 INITIAL_ADMIN_PASSWORD");
+  }
+  const admin =
+    existingAdmin ||
+    (await prisma.admin.create({
+      data: {
+        username: "admin",
+        passwordHash: bcrypt.hashSync(initialPassword, 10),
+        role: "MANAGER",
+        mustChangePassword: true,
+      },
+    }));
   // 默认密码仍在使用时，强制下一次登录修改
-  if (admin && bcrypt.compareSync("admin123", admin.passwordHash)) {
+  if (initialPassword && bcrypt.compareSync(initialPassword, admin.passwordHash)) {
     await prisma.admin.update({
       where: { id: admin.id },
       data: { mustChangePassword: true },

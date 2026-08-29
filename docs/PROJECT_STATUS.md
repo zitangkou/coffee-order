@@ -20,7 +20,7 @@
 | 前端 | uni-app（Vue3 + TypeScript + Pinia），一套代码编译 H5 + 微信小程序 |
 | 后端 | Node.js + TypeScript + Express + Prisma |
 | 数据库 | 本地开发 SQLite；生产 MySQL 8（`server/prisma/schema.mysql.prisma`） |
-| 部署 | Docker Compose（MySQL + 后端 + 前端 Nginx 三容器），Ubuntu 22.04 |
+| 部署 | Docker Compose 一键部署（MySQL + 非 root API/Web + 卷初始化），Ubuntu 22.04/24.04 |
 
 架构：`浏览器 → Nginx(:80) → /api 反代 → Node(:3000) → MySQL`，Nginx 同时托管 H5 静态产物与 `/uploads`（桌码图）。
 
@@ -50,7 +50,7 @@
 
 **商家端**
 
-- 登录鉴权（JWT，默认账号 admin/admin123）
+- 登录鉴权（JWT；本地默认 admin/admin123，生产随机一次性密码）
 - 经营看板：今日营收/订单数/客单价/待接单
 - 订单工作台：状态 Tab、接单/出餐/完成、10 秒轮询、退款审核（同意/拒绝）
 - 商品管理：增删改、上下架、售罄开关、规格 JSON 编辑
@@ -91,9 +91,9 @@
 ### 云服务器（腾讯云）
 
 - 系统：Ubuntu 22.04 LTS，4核4G，公网 IP `124.223.178.64`
-- 部署方式：Docker 一键（`./deploy.sh`），详见 [docs/部署指南.md](部署指南.md)
+- 部署方式：Docker 一键（`./deploy.sh`，可选 `--with-https`），详见 [Docker一键部署.md](Docker一键部署.md)
 - 服务器拉代码走 SSH 失败（私有仓库无 Deploy Key），已给方案：生成 `~/.ssh/coffee_deploy` 公钥加到 GitHub Deploy Keys（只读）
-- 登录服务器后流程：`git clone` → `cp deploy/.env.example .env` → `nano .env` → `./deploy.sh`
+- 登录服务器后流程：`git clone` → `./deploy.sh`；安全配置、migration、seed、健康检查、备份和监控自动完成。
 
 ## 7. 后续待开发清单（TODO）
 
@@ -200,7 +200,7 @@
 - 密码策略：管理员密码最少 8 位；新建管理员强制首登改密；默认密码 `admin123` 被检测到时强制开启改密（`Admin.mustChangePassword`）；修改密码后清除标记。
 - 登录态：管理员 JWT 有效期由 7 天收紧为 2 天。
 - Nginx：安全响应头（X-Content-Type-Options / X-Frame-Options / Referrer-Policy / CSP）。
-- 数据库备份：`deploy/backup.sh`（mysqldump + gzip + 保留 14 天）+ `deploy/install-backup.sh`（crontab 每日 03:00）。
+- 数据库与上传文件备份：`deploy/backup.sh`（配套归档、校验和、保留 14 天）+ 每日备份/每周恢复验证 cron。
 - 冒烟测试扩展至 19 项，全部通过；双端构建通过。
 
 **仍依赖外部条件的项（代码/配置已就绪，待激活）**：
@@ -453,6 +453,18 @@
 - 新增 GitHub Actions，在隔离 SQLite 数据库执行生产发布门禁；Prisma CLI 保留为生产迁移依赖，`tsx` 和 TypeScript 不进入 API 运行镜像。
 
 **仍需服务器完成**：实际构建新镜像并核对证书文件对 UID 1000 可读；运行数据库+上传文件备份和临时恢复演练；同步 COS；安装监控 cron 并接入腾讯云日志/告警。以上操作均不需要把安全信息写入仓库或会话。
+
+## 29. Docker 一键部署完善 · 2026-08-29
+
+- `./deploy.sh` 现可从空服务器配置开始执行：缺少 `.env` 时自动创建并生成 MySQL/JWT/一次性管理员强密码，缺少 Docker 时自动调用环境初始化；所有生成值只写权限受限文件，不输出终端。
+- 部署拆分为 Compose/磁盘预检、旧版本自动备份、镜像构建、MySQL 健康等待、migration/baseline、应用 readiness、seed、维护任务和可选 HTTPS 阶段；失败信息只报告阶段和安全的手动诊断命令。
+- `INITIALIZE_SEED`、`BASELINE_EXISTING_DB` 和一次性管理员密码在成功使用后自动从持续配置复位；管理员凭据仅落到 `var/initial-admin-credentials.txt`，首次改密后由运维删除。
+- 生产 seed 不再创建固定 `admin123`；只有本地开发保留默认密码。订单超时、短信/下单/支付限流和支付回调地址已完整传入 API 容器。
+- 重复部署检测到旧版 MySQL/API 运行时先备份数据库和上传文件，再构建更新；MySQL/API/Web 若进入 unhealthy/exited 会提前失败，不再盲等超时。
+- 新增 `--with-https`：按 `.env` 的公开域名和证书邮箱安装宿主机 Nginx/Certbot，完成 ACME、证书续期、HTTPS 反代和公网 readiness 验证。
+- 备份、恢复验证和监控 cron 改用项目内 `var/` 目录，避免非 root 部署无权写 `/opt` 或 `/var/log`；新增独立 `deploy-safety` 回归，不读取项目安全配置即可验证生成器、幂等更新、脚本语法和 Compose 门禁。
+
+**服务器验收项**：本机 Docker daemon 未启动，无法在开发机实际构建镜像；需在腾讯云首次运行 `./deploy.sh` 验证镜像拉取、证书文件 UID 1000 只读权限及公网 HTTPS。代码静态检查不依赖任何私密发布资料。
 
 ---
 

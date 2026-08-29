@@ -1,4 +1,6 @@
 // 不依赖微信凭据，验证下单幂等和按北京时间营业日生成的唯一取餐码。
+import "dotenv/config";
+
 const { prisma } = await import("../dist/lib/prisma.js");
 const { businessDate } = await import("../dist/lib/ids.js");
 const { createOrder } = await import("../dist/services/order.js");

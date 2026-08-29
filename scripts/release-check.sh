@@ -30,7 +30,13 @@ bash -n "$ROOT_DIR/deploy.sh" \
   "$ROOT_DIR/deploy/wechat-readiness.sh" \
   "$ROOT_DIR/deploy/install-backup.sh" \
   "$ROOT_DIR/deploy/monitor.sh" \
-  "$ROOT_DIR/deploy/install-monitor.sh"
+  "$ROOT_DIR/deploy/install-monitor.sh" \
+  "$ROOT_DIR/deploy/init-config.sh" \
+  "$ROOT_DIR/deploy/update-env.sh" \
+  "$ROOT_DIR/deploy/setup-https.sh"
+
+echo "[release-check] Docker 一键部署安全回归"
+bash "$ROOT_DIR/scripts/deploy-safety.sh"
 
 if ! rg -qx 'secrets' "$ROOT_DIR/.dockerignore" || ! rg -qx '\.env' "$ROOT_DIR/.dockerignore"; then
   echo "[release-check] ✗ Docker 构建上下文必须排除 secrets 和根环境文件"
@@ -102,6 +108,9 @@ npm --prefix "$ROOT_DIR/web" run build:h5
 
 echo "[release-check] 后端构建与安全门禁"
 npm --prefix "$ROOT_DIR/server" run security
+
+echo "[release-check] 生产 seed 编译"
+npm --prefix "$ROOT_DIR/server" run build:seed
 
 echo "[release-check] 退款资金状态机"
 npm --prefix "$ROOT_DIR/server" run test:refund-state
