@@ -82,6 +82,8 @@ npm run build:mp-weixin # 微信小程序产物 dist/build/mp-weixin
 
 分批实施进度见 **[docs/发布前优化排期.md](docs/发布前优化排期.md)**。
 
+电脑端管理后台的独立建设方案见 **[docs/电脑端管理后台规划.md](docs/电脑端管理后台规划.md)**。
+
 **服务器上执行：**
 
 ```bash
