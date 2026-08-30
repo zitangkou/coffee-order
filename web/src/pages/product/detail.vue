@@ -30,7 +30,7 @@
       <view v-for="group in specGroups" :key="group.id" class="spec-group">
         <view class="spec-name">
           {{ group.name }}
-          <text class="multi-hint">{{ group.type === "MULTI" ? "可多选" : group.required ? "必选" : "选填" }}</text>
+          <text class="multi-hint">{{ group.type === "MULTI" ? (group.required ? "必选 · 可多选" : "可多选") : group.required ? "必选" : "选填" }}</text>
         </view>
         <view class="spec-options">
           <view
@@ -128,7 +128,11 @@ function initSelections() {
   for (const group of specGroups.value) {
     const defaults = group.options.filter((o) => o.isDefault).map((o) => o.label);
     if (group.type === "MULTI") {
-      sel[group.name] = defaults;
+      sel[group.name] = defaults.length
+        ? defaults
+        : group.required && group.options.length
+          ? [group.options[0].label]
+          : [];
     } else if (defaults.length) {
       sel[group.name] = [defaults[0]];
     } else if (group.required && group.options.length) {
@@ -150,6 +154,10 @@ function toggleOption(
 ) {
   const current = selections.value[group.name] ?? [];
   if (current.includes(opt.label)) {
+    if (group.required && current.length === 1) {
+      uni.showToast({ title: `${group.name}至少选择一项`, icon: "none" });
+      return;
+    }
     selections.value[group.name] = current.filter((l) => l !== opt.label);
   } else if (group.type === "MULTI") {
     selections.value[group.name] = [...current, opt.label];
@@ -168,6 +176,10 @@ function addToCart() {
   const specs: Record<string, string | string[]> = {};
   for (const group of specGroups.value) {
     const sel = selections.value[group.name] ?? [];
+    if (group.required && !sel.length) {
+      uni.showToast({ title: `请选择${group.name}`, icon: "none" });
+      return;
+    }
     if (sel.length) specs[group.name] = group.type === "MULTI" ? sel : sel[0];
   }
   cart.add({
