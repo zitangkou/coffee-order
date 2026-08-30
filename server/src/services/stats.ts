@@ -7,7 +7,7 @@ import {
   shiftBusinessDate,
 } from "../lib/businessTime.js";
 
-const PAID_STATUSES = ["PAID", "MAKING", "READY", "COMPLETED"];
+const PAID_STATUSES = ["PAID", "MAKING", "READY", "COMPLETED"] as const;
 
 function rangeFor(unit: "today" | "week" | "month") {
   return businessRange(unit);
@@ -15,7 +15,7 @@ function rangeFor(unit: "today" | "week" | "month") {
 
 export async function paidOrdersBetween(start: Date, end: Date) {
   return prisma.order.findMany({
-    where: { status: { in: PAID_STATUSES }, paidAt: { gte: start, lte: end } },
+    where: { status: { in: [...PAID_STATUSES] }, paidAt: { gte: start, lte: end } },
     include: { items: true },
   });
 }
@@ -102,7 +102,7 @@ export async function trend(days: number) {
 export async function categoryShare(unit: "today" | "week" | "month" = "today") {
   const { start, end } = rangeFor(unit);
   const orders = await prisma.order.findMany({
-    where: { status: { in: PAID_STATUSES }, paidAt: { gte: start, lte: end } },
+    where: { status: { in: [...PAID_STATUSES] }, paidAt: { gte: start, lte: end } },
     include: { items: { include: { product: { include: { category: true } } } } },
   });
   const map = new Map<string, { revenue: number; qty: number }>();

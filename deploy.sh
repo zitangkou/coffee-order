@@ -7,7 +7,7 @@ CURRENT_STAGE="启动前检查"
 on_error() {
   local code=$?
   echo ""
-  echo "[deploy] 部署失败，阶段：$CURRENT_STAGE（退出码 $code）"
+  echo "[deploy] 部署失败，阶段：${CURRENT_STAGE}（退出码 ${code}）"
   echo "[deploy] 未自动输出应用日志，避免意外暴露业务信息。可手动执行："
   echo "  docker compose ps"
   echo "  docker compose logs --tail=100 server"

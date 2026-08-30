@@ -63,4 +63,4 @@ if ! [[ "$TABLE_COUNT" =~ ^[0-9]+$ ]] || [ "$TABLE_COUNT" -lt 10 ]; then
   exit 1
 fi
 
-echo "[restore-verify] 通过：数据库可恢复且上传文件归档可读取，临时验证库将自动删除（表数 $TABLE_COUNT）"
+echo "[restore-verify] 通过：数据库可恢复且上传文件归档可读取，临时验证库将自动删除（表数 ${TABLE_COUNT}）"

@@ -132,7 +132,7 @@ export async function jscode2session(code: string): Promise<{ openid: string; se
 
 // 微信支付 JSAPI 下单，返回 wx.requestPayment 所需参数
 export async function createJsapiPayment(
-  order: { orderNo: string; totalAmount: number },
+  order: { orderNo: string; totalAmount: number | { toString(): string } },
   openid: string
 ): Promise<Record<string, string>> {
   if (!wxPayConfigured()) throw new Error("微信支付未配置");

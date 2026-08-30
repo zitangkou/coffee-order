@@ -15,6 +15,13 @@ bash -n deploy.sh \
   deploy/install-monitor.sh \
   deploy/monitor.sh
 
+# 在 UTF-8 locale 下，未加花括号的变量紧邻中文标点可能被 Bash 当成更长变量名。
+if rg -n '\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7F]' \
+  deploy.sh deploy/*.sh scripts/*.sh >/dev/null; then
+  echo "[deploy-safety] ✗ shell 变量紧邻非 ASCII 字符，请改用 \${VAR}"
+  exit 1
+fi
+
 TEMP_ENV="$(mktemp)"
 rm -f "$TEMP_ENV"
 trap 'rm -f "$TEMP_ENV"' EXIT

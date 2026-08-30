@@ -60,7 +60,7 @@ HTTP_CODE="$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 8 --max-t
 if [ "$HTTP_CODE" = "200" ]; then
   pass "公网 HTTPS API 健康"
 else
-  fail "公网 HTTPS API 不可用（HTTP $HTTP_CODE）"
+  fail "公网 HTTPS API 不可用（HTTP ${HTTP_CODE}）"
 fi
 
 if command -v ufw >/dev/null 2>&1; then

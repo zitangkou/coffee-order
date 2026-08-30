@@ -10,8 +10,13 @@ mkdir -p "$LOG_DIR"
 CRON_LINE="0 3 * * * /bin/bash $SCRIPT_PATH >> $LOG_DIR/backup.log 2>&1 # coffee-order-backup"
 VERIFY_CRON_LINE="30 4 * * 0 /bin/bash $VERIFY_PATH >> $LOG_DIR/restore-verify.log 2>&1 # coffee-order-restore-verify"
 
-# 避免重复安装：先移除本项目已有任务。
-(crontab -l 2>/dev/null | grep -v "# coffee-order-" || true; echo "$CRON_LINE"; echo "$VERIFY_CRON_LINE") | crontab -
+# 完全一致时不重写 crontab，避免重复部署触发不必要的系统权限操作。
+CURRENT_CRONTAB="$(crontab -l 2>/dev/null || true)"
+if ! grep -Fqx -- "$CRON_LINE" <<< "$CURRENT_CRONTAB" || \
+   ! grep -Fqx -- "$VERIFY_CRON_LINE" <<< "$CURRENT_CRONTAB"; then
+  (printf '%s\n' "$CURRENT_CRONTAB" | grep -v "# coffee-order-" || true; \
+    echo "$CRON_LINE"; echo "$VERIFY_CRON_LINE") | crontab -
+fi
 
 echo "已安装每日 03:00 数据库与上传文件自动备份：$SCRIPT_PATH"
 echo "已安装每周日 04:30 自动恢复验证：$VERIFY_PATH"

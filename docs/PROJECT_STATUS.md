@@ -464,7 +464,9 @@
 - 新增 `--with-https`：按 `.env` 的公开域名和证书邮箱安装宿主机 Nginx/Certbot，完成 ACME、证书续期、HTTPS 反代和公网 readiness 验证。
 - 备份、恢复验证和监控 cron 改用项目内 `var/` 目录，避免非 root 部署无权写 `/opt` 或 `/var/log`；新增独立 `deploy-safety` 回归，不读取项目安全配置即可验证生成器、幂等更新、脚本语法和 Compose 门禁。
 
-**服务器验收项**：本机 Docker daemon 未启动，无法在开发机实际构建镜像；需在腾讯云首次运行 `./deploy.sh` 验证镜像拉取、证书文件 UID 1000 只读权限及公网 HTTPS。代码静态检查不依赖任何私密发布资料。
+**本机 Docker 实测**：已在 ARM64 Docker Desktop 从零拉取 MySQL、构建 MySQL Prisma API/Web 镜像并完整运行 `./deploy.sh`；migration、生产 seed、三容器健康检查、API/Web、本地低权限备份、临时库恢复演练及 `--skip-build` 幂等复跑均通过。实测修复了跨地域 Debian 镜像不可达、SQLite/MySQL Prisma 类型差异、Alpine `localhost` IPv6 健康误报、`mysqldump` tablespace 权限警告、Bash 变量紧邻中文标点和重复写入 crontab 等问题。
+
+**腾讯云剩余验收项**：首次运行 `./deploy.sh --with-https`，验证域名解析、证书申请与续期、证书文件 UID 1000 只读权限及公网 HTTPS；再接入 COS 异机备份和腾讯云告警。以上操作均不需要把安全信息写入仓库或会话。
 
 ---
 

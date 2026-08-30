@@ -1,14 +1,14 @@
 import { prisma } from "../lib/prisma.js";
 import { memberLevel } from "../lib/member.js";
 
-const PAID_STATUSES = ["PAID", "MAKING", "READY", "COMPLETED"];
+const PAID_STATUSES = ["PAID", "MAKING", "READY", "COMPLETED"] as const;
 
 export async function memberProfile(userId: number) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
       orders: {
-        where: { status: { in: PAID_STATUSES } },
+        where: { status: { in: [...PAID_STATUSES] } },
         orderBy: { createdAt: "desc" },
         include: { items: true },
       },

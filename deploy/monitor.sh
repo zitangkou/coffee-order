@@ -30,7 +30,7 @@ HTTP_CODE="$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 8 --max-t
 if [ "$HTTP_CODE" = "200" ]; then
   pass "公网 API 与数据库就绪"
 else
-  fail "公网 API 未就绪（HTTP $HTTP_CODE）"
+  fail "公网 API 未就绪（HTTP ${HTTP_CODE}）"
 fi
 
 DISK_USE="$(df -P . | awk 'NR==2 { gsub(/%/, "", $5); print $5 }')"

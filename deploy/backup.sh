@@ -21,7 +21,7 @@ umask 077
 mkdir -p "$BACKUP_DIR"
 
 docker compose exec -T mysql \
-  sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysqldump -ucoffee --single-transaction --quick --routines --triggers coffee_os' \
+  sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysqldump -ucoffee --single-transaction --quick --routines --triggers --no-tablespaces coffee_os' \
   | gzip > "$FILE"
 
 gzip -t "$FILE"
