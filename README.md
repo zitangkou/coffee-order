@@ -6,7 +6,8 @@
 
 | 端 | 技术 |
 | --- | --- |
-| 顾客端/商家端前端 | uni-app（Vue3 + TypeScript + Pinia），编译 H5 与微信小程序 |
+| 微信小程序 | uni-app（Vue3 + TypeScript + Pinia） |
+| 电脑管理端 | Vue 3 + Vite + TypeScript + Pinia + Element Plus + ECharts |
 | 后端 | Node.js + TypeScript + Express + Prisma |
 | 数据库 | 本地开发 SQLite；生产 MySQL 8（schema 见 `server/prisma/schema.mysql.prisma`） |
 | 部署 | Docker Compose（MySQL + Node.js API + Nginx） |
@@ -23,13 +24,14 @@ coffee-order/
 │   │   └── lib/           # prisma、jwt、响应封装
 │   ├── docker-compose.yml # 生产 MySQL 8
 │   └── .env.example
-├── web/                   # uni-app 前端（H5 + 微信小程序）
+├── web/                   # uni-app 微信小程序与旧版 H5 后台
 │   └── src/
 │       ├── pages/         # 顾客端页面
 │       ├── pages_admin/   # 商家后台页面
 │       ├── stores/        # user / cart
 │       ├── api/           # 接口封装
 │       └── utils/         # request 封装
+├── admin-web/             # 独立电脑管理端
 └── docs/                  # 综合需求与设计文档
 ```
 
@@ -68,9 +70,19 @@ npm run build:mp-weixin # 微信小程序产物 dist/build/mp-weixin
 
 小程序产物用微信开发者工具导入 `web/dist/build/mp-weixin` 即可预览。
 
+### 4. 启动电脑管理端
+
+```bash
+cd admin-web
+npm install
+npm run dev              # http://127.0.0.1:5174
+```
+
+开发服务会将 `/api` 和 `/uploads` 代理到本机 `3000` 端口的后端。生产构建执行 `npm run build`。
+
 ## 生产部署（Docker 一键方案，推荐）
 
-腾讯云 4核4G 可支撑首发阶段。仓库根目录已提供完整 Docker 化部署（MySQL + 非 root API + 非 root 前端 Nginx，并带备份、恢复校验和监控脚本）。
+腾讯云 4核4G 可支撑首发阶段。仓库根目录已提供完整 Docker 化部署（MySQL + 非 root API + 小程序配套 Web + 独立电脑管理端，并带备份、恢复校验和监控脚本）。
 
 完整图文步骤见 **[docs/部署指南.md](docs/部署指南.md)**（Ubuntu 22.04 + 安装 Docker + 部署 + HTTPS + 安全 + 运维）。
 
@@ -95,6 +107,7 @@ git clone git@github.com:zitangkou/coffee-order.git && cd coffee-order
 
 - 公网 API/图片：由宿主机 Nginx 通过 `https://nagacoffee.site` 转发
 - 商家后台：`https://nagacoffee.site/#/pages_admin/login/index`（首次登录后立即修改初始密码）
+- 新电脑管理端：容器默认仅监听服务器 `127.0.0.1:8081`；功能验收和管理子域名 HTTPS 就绪后切换
 
 **说明**
 

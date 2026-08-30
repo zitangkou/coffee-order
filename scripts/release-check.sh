@@ -44,7 +44,7 @@ if ! rg -qx 'secrets' "$ROOT_DIR/.dockerignore" || ! rg -qx '\.env' "$ROOT_DIR/.
 fi
 
 if rg -n 'console\.(log|error|warn)\([^\n]*(process\.env|WECHAT_API_V3_KEY|WECHAT_MP_SECRET)|JSON\.stringify\(process\.env' \
-  "$ROOT_DIR/server/src" "$ROOT_DIR/server/scripts" "$ROOT_DIR/web/src" >/dev/null; then
+  "$ROOT_DIR/server/src" "$ROOT_DIR/server/scripts" "$ROOT_DIR/web/src" "$ROOT_DIR/admin-web/src" >/dev/null; then
   echo "[release-check] ✗ 源码存在可能输出敏感环境变量的日志"
   exit 1
 fi
@@ -105,6 +105,15 @@ fi
 
 echo "[release-check] H5 构建"
 npm --prefix "$ROOT_DIR/web" run build:h5
+
+echo "[release-check] 电脑管理端构建"
+npm --prefix "$ROOT_DIR/admin-web" run build
+
+if rg -q 'http://(localhost|127\.0\.0\.1)|BEGIN (RSA )?PRIVATE KEY|WECHAT_MP_SECRET|WECHAT_API_V3_KEY|MCH_PRIVATE' \
+  "$ROOT_DIR/admin-web/dist"; then
+  echo "[release-check] ✗ 电脑管理端产物包含本地地址或敏感配置标记"
+  exit 1
+fi
 
 echo "[release-check] 后端构建与安全门禁"
 npm --prefix "$ROOT_DIR/server" run security
@@ -188,8 +197,9 @@ if rg -q 'db push|accept-data-loss' "$ROOT_DIR/Dockerfile.server"; then
 fi
 
 if ! rg -q '^USER node$' "$ROOT_DIR/Dockerfile.server" || \
-   ! rg -q '^FROM nginxinc/nginx-unprivileged:' "$ROOT_DIR/Dockerfile.web"; then
-  echo "[release-check] ✗ API 与 Web 生产镜像必须配置非 root 运行"
+   ! rg -q '^FROM nginxinc/nginx-unprivileged:' "$ROOT_DIR/Dockerfile.web" || \
+   ! rg -q '^FROM nginxinc/nginx-unprivileged:' "$ROOT_DIR/Dockerfile.admin"; then
+  echo "[release-check] ✗ API 与前端生产镜像必须配置非 root 运行"
   exit 1
 fi
 

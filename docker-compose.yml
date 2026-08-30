@@ -120,6 +120,29 @@ services:
     cpus: 0.25
     logging: *default-logging
 
+  admin-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+      args:
+        VITE_API_BASE: ${VITE_API_BASE:-/api}
+    container_name: coffee-admin-web
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+    ports:
+      # 电脑管理端仅绑定宿主机本地端口，对外由独立管理域名的 Nginx 网关转发
+      - "127.0.0.1:${ADMIN_HTTP_PORT:-8081}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/api/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    mem_limit: 128m
+    cpus: 0.25
+    logging: *default-logging
+
 volumes:
   mysql_data:
   uploads:

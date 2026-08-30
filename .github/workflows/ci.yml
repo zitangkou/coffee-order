@@ -24,10 +24,12 @@ jobs:
           cache-dependency-path: |
             server/package-lock.json
             web/package-lock.json
+            admin-web/package-lock.json
       - name: Install dependencies
         run: |
           npm --prefix server ci --no-audit --no-fund
           npm --prefix web ci --no-audit --no-fund
+          npm --prefix admin-web ci --no-audit --no-fund
       - name: Initialize isolated SQLite database
         run: |
           touch /tmp/coffee-order-ci.db

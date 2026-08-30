@@ -18,6 +18,8 @@ secrets
 **/*apiclient*
 web/node_modules
 web/dist
+admin-web/node_modules
+admin-web/dist
 .git
 .DS_Store
 md

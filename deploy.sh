@@ -55,6 +55,7 @@ compose_env_value() {
 BASELINE_EXISTING_DB_VALUE="${BASELINE_EXISTING_DB:-$(compose_env_value BASELINE_EXISTING_DB)}"
 INITIALIZE_SEED_VALUE="${INITIALIZE_SEED:-$(compose_env_value INITIALIZE_SEED)}"
 HTTP_PORT_VALUE="${HTTP_PORT:-$(compose_env_value HTTP_PORT)}"
+ADMIN_HTTP_PORT_VALUE="${ADMIN_HTTP_PORT:-$(compose_env_value ADMIN_HTTP_PORT)}"
 WEB_BASE_URL_VALUE="${WEB_BASE_URL:-$(compose_env_value WEB_BASE_URL)}"
 RUN_SERVER_SECURITY_CHECK_VALUE="${RUN_SERVER_SECURITY_CHECK:-$(compose_env_value RUN_SERVER_SECURITY_CHECK)}"
 INSTALL_MAINTENANCE_CRON_VALUE="${INSTALL_MAINTENANCE_CRON:-$(compose_env_value INSTALL_MAINTENANCE_CRON)}"
@@ -75,6 +76,12 @@ fi
 if ! [[ "${HTTP_PORT_VALUE:-8080}" =~ ^[0-9]+$ ]] || \
    [ "${HTTP_PORT_VALUE:-8080}" -lt 1024 ] || [ "${HTTP_PORT_VALUE:-8080}" -gt 65535 ]; then
   echo "部署已拒绝：HTTP_PORT 必须是 1024–65535 的端口"
+  exit 1
+fi
+if ! [[ "${ADMIN_HTTP_PORT_VALUE:-8081}" =~ ^[0-9]+$ ]] || \
+   [ "${ADMIN_HTTP_PORT_VALUE:-8081}" -lt 1024 ] || [ "${ADMIN_HTTP_PORT_VALUE:-8081}" -gt 65535 ] || \
+   [ "${ADMIN_HTTP_PORT_VALUE:-8081}" = "${HTTP_PORT_VALUE:-8080}" ]; then
+  echo "部署已拒绝：ADMIN_HTTP_PORT 必须是未与 HTTP_PORT 重复的 1024–65535 端口"
   exit 1
 fi
 
@@ -141,20 +148,24 @@ docker compose up -d
 echo "[5/6] 等待服务与数据库就绪"
 CURRENT_STAGE="应用健康检查"
 WEB_HEALTHY=false
+ADMIN_WEB_HEALTHY=false
 for _ in $(seq 1 90); do
   WEB_STATUS="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' coffee-web 2>/dev/null || true)"
+  ADMIN_WEB_STATUS="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' coffee-admin-web 2>/dev/null || true)"
   SERVER_STATUS="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' coffee-server 2>/dev/null || true)"
-  if [ "$WEB_STATUS" = "healthy" ]; then
+  if [ "$WEB_STATUS" = "healthy" ] && [ "$ADMIN_WEB_STATUS" = "healthy" ]; then
     WEB_HEALTHY=true
+    ADMIN_WEB_HEALTHY=true
     break
   fi
   if [ "$WEB_STATUS" = "unhealthy" ] || [ "$WEB_STATUS" = "exited" ] || \
+     [ "$ADMIN_WEB_STATUS" = "unhealthy" ] || [ "$ADMIN_WEB_STATUS" = "exited" ] || \
      [ "$SERVER_STATUS" = "unhealthy" ] || [ "$SERVER_STATUS" = "exited" ]; then
     break
   fi
   sleep 2
 done
-if [ "$WEB_HEALTHY" != true ]; then
+if [ "$WEB_HEALTHY" != true ] || [ "$ADMIN_WEB_HEALTHY" != true ]; then
   echo "应用在 180 秒内未达到健康状态"
   exit 1
 fi
@@ -179,7 +190,9 @@ fi
 echo "[6/6] 验证 API（本机内网）"
 CURRENT_STAGE="本机 readiness 验证"
 PORT="${HTTP_PORT_VALUE:-8080}"
+ADMIN_PORT="${ADMIN_HTTP_PORT_VALUE:-8081}"
 curl -fsS "http://127.0.0.1:${PORT}/api/health/ready" >/dev/null
+curl -fsS "http://127.0.0.1:${ADMIN_PORT}/api/health/ready" >/dev/null
 
 if [ "${INSTALL_MAINTENANCE_CRON_VALUE:-true}" = "true" ]; then
   CURRENT_STAGE="备份与监控任务安装"
@@ -212,6 +225,7 @@ fi
 echo ""
 echo "部署完成！"
 echo "  本机内网入口: http://127.0.0.1:${PORT}"
+echo "  电脑管理端:   http://127.0.0.1:${ADMIN_PORT}（仅服务器本机；待管理域名 HTTPS 网关启用）"
 echo "  对外访问:     由宿主机 Nginx 网关按域名转发"
 echo "  商家后台:     ${WEB_BASE_URL_VALUE%/}/#/pages_admin/login/index（首次登录后立即修改初始密码）"
 if [ -f var/initial-admin-credentials.txt ]; then
