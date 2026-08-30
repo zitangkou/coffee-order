@@ -4,6 +4,8 @@ WORKDIR /app
 
 ARG VITE_API_BASE=/api
 ENV VITE_API_BASE=$VITE_API_BASE
+ARG VITE_H5_CUSTOMER_ENABLED=false
+ENV VITE_H5_CUSTOMER_ENABLED=$VITE_H5_CUSTOMER_ENABLED
 
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund

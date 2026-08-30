@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <view class="card add-row">
+    <view v-if="isManager" class="card add-row">
       <input v-model="newTable" class="f-input" placeholder="桌号，如 A09" />
       <view class="mini-btn" @tap="addTable">新增</view>
     </view>
@@ -23,10 +23,10 @@
           </text>
         </view>
         <view class="t-actions">
-          <view class="mini-btn" @tap="toggle(t)">{{ t.isActive ? "停用" : "启用" }}</view>
+          <view v-if="isManager" class="mini-btn" @tap="toggle(t)">{{ t.isActive ? "停用" : "启用" }}</view>
           <view class="mini-btn" @tap="qr(t)">生成小程序码</view>
           <view v-if="t.qrCodeUrl" class="mini-btn" @tap="openQr(t)">查看</view>
-          <view class="mini-btn danger" @tap="remove(t)">删除</view>
+          <view v-if="isManager" class="mini-btn danger" @tap="remove(t)">删除</view>
         </view>
       </view>
       <view v-if="t.qrCodeUrl" class="text-sub qr-hint">二维码：{{ t.qrCodeUrl }}</view>
@@ -42,12 +42,19 @@ import { onShow } from "@dcloudio/uni-app";
 import { api } from "../../api";
 import { API_BASE } from "../../config";
 import type { Table } from "../../types";
+import { requireAdminPage } from "../../utils/adminAuth";
 
 const tables = ref<Table[]>([]);
 const newTable = ref("");
 const takeoutQr = ref("");
+const isManager = ref(false);
 
-onShow(load);
+onShow(() => {
+  const info = requireAdminPage();
+  if (!info) return;
+  isManager.value = info.role === "MANAGER";
+  load();
+});
 
 async function load() {
   try {

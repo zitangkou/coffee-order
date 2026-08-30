@@ -12,7 +12,9 @@
       </view>
     </scroll-view>
 
-    <view v-for="o in filtered" :key="o.id" class="card order" @tap="goDetail(o.id)">
+    <view v-if="loading" class="empty">订单加载中…</view>
+    <view v-else-if="error" class="card empty">{{ error }}</view>
+    <view v-else v-for="o in filtered" :key="o.id" class="card order" @tap="goDetail(o.id)">
       <view class="o-top">
         <text class="o-no">{{ o.orderNo }}</text>
         <text class="badge" :class="statusClass(o.status)">{{ statusText(o.status) }}</text>
@@ -28,7 +30,7 @@
       </view>
     </view>
 
-    <view v-if="!filtered.length" class="empty">暂无订单</view>
+    <view v-if="!loading && !error && !filtered.length" class="empty">暂无订单</view>
   </view>
 </template>
 
@@ -37,8 +39,13 @@ import { computed, ref } from "vue";
 import { onLoad, onPullDownRefresh } from "@dcloudio/uni-app";
 import { api } from "../../api";
 import { ORDER_STATUS_TEXT, type Order, type OrderStatus } from "../../types";
+import { useUserStore } from "../../stores/user";
+import { blockDisabledH5Customer } from "../../utils/customerAccess";
 
+const user = useUserStore();
 const orders = ref<Order[]>([]);
+const loading = ref(true);
+const error = ref("");
 const activeTab = ref("");
 const tabs = [
   { label: "全部", value: "" },
@@ -52,17 +59,37 @@ const filtered = computed(() =>
   activeTab.value ? orders.value.filter((o) => o.status === activeTab.value) : orders.value
 );
 
-onLoad(load);
+onLoad(async () => {
+  if (blockDisabledH5Customer()) return;
+  try {
+    await user.ensureLogin();
+  } catch (e: any) {
+    error.value = e.message || "微信登录失败，请重新进入小程序";
+    loading.value = false;
+    return;
+  }
+  if (!user.token) {
+    error.value = "当前仅支持在微信小程序登录后查看订单";
+    loading.value = false;
+    return;
+  }
+  await load();
+});
 onPullDownRefresh(async () => {
   await load();
   uni.stopPullDownRefresh();
 });
 
 async function load() {
+  if (!user.token) return;
+  loading.value = true;
+  error.value = "";
   try {
     orders.value = await api.myOrders();
   } catch (e: any) {
-    uni.showToast({ title: e.message || "加载失败", icon: "none" });
+    error.value = e.message || "订单加载失败，请稍后重试";
+  } finally {
+    loading.value = false;
   }
 }
 

@@ -32,16 +32,16 @@
         <text v-if="p.flavorNotes" class="text-sub">{{ p.flavorNotes }}</text>
       </view>
       <view class="p-actions">
-        <view class="mini-btn" @tap="uploadImage(p)">传图</view>
-        <view class="mini-btn" @tap="openEdit(p)">编辑</view>
+        <view v-if="isManager" class="mini-btn" @tap="uploadImage(p)">传图</view>
+        <view v-if="isManager" class="mini-btn" @tap="openEdit(p)">编辑</view>
         <view class="mini-btn" @tap="toggleSoldOut(p)">{{ p.isSoldOut ? "恢复在售" : "标记售罄" }}</view>
-        <view class="mini-btn" @tap="toggleActive(p)">{{ p.isActive ? "下架" : "上架" }}</view>
-        <view class="mini-btn danger" @tap="remove(p)">删除</view>
+        <view v-if="isManager" class="mini-btn" @tap="toggleActive(p)">{{ p.isActive ? "下架" : "上架" }}</view>
+        <view v-if="isManager" class="mini-btn danger" @tap="remove(p)">删除</view>
       </view>
     </view>
 
     <view v-if="!products.length" class="empty">没有匹配的商品</view>
-    <view class="add-bar btn-primary" @tap="openCreate">＋ 新增商品</view>
+    <view v-if="isManager" class="add-bar btn-primary" @tap="openCreate">＋ 新增商品</view>
 
     <!-- 商品编辑弹层 -->
     <view v-if="showForm" class="mask" @tap="closeForm">
@@ -125,11 +125,13 @@ import { onShow } from "@dcloudio/uni-app";
 import { api } from "../../api";
 import { API_BASE, STORAGE_KEYS } from "../../config";
 import type { Product } from "../../types";
+import { requireAdminPage } from "../../utils/adminAuth";
 
 const products = ref<Product[]>([]);
 const cats = ref<any[]>([]);
 const specGroups = ref<any[]>([]);
 const showForm = ref(false);
+const isManager = ref(false);
 const filters = reactive({ keyword: "", categoryId: 0, status: "" });
 const statusOptions = [
   { label: "全部状态", value: "" },
@@ -148,7 +150,12 @@ function onGroupTypeChange(e: any) {
   newGroup.type = Number(e.detail.value) === 1 ? "MULTI" : "SINGLE";
 }
 
-onShow(loadAll);
+onShow(() => {
+  const info = requireAdminPage();
+  if (!info) return;
+  isManager.value = info.role === "MANAGER";
+  loadAll();
+});
 
 async function loadAll() {
   try {

@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { STORAGE_KEYS } from "../config";
+import { H5_CUSTOMER_ENABLED, STORAGE_KEYS } from "../config";
 import { api } from "../api";
 import type { Table } from "../types";
 import { wxLoginCode } from "../utils/platform";
@@ -36,6 +36,7 @@ export const useUserStore = defineStore("user", {
         // #endif
       }
       // #ifndef MP-WEIXIN
+      if (!H5_CUSTOMER_ENABLED) return;
       try {
         let deviceId = uni.getStorageSync(STORAGE_KEYS.deviceId) as string;
         if (!deviceId) {

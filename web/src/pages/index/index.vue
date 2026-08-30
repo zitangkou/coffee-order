@@ -131,6 +131,7 @@ import { applyTableId } from "../../utils/table";
 import { assetUrl } from "../../utils/assets";
 import SpecSheet from "../../components/SpecSheet.vue";
 import type { Category, Product, Shop, Table } from "../../types";
+import { blockDisabledH5Customer } from "../../utils/customerAccess";
 
 type TabKey = "all" | "signature" | "hot" | number;
 
@@ -149,6 +150,7 @@ const activeKey = ref<TabKey>("all");
 const showTablePicker = ref(false);
 const activeProduct = ref<Product | null>(null);
 const showSpecSheet = ref(false);
+let initialLoadFinished = false;
 
 const allProducts = computed(() => categories.value.flatMap((c) => c.products));
 const signatureProducts = computed(() => allProducts.value.filter((p) => p.isSignature));
@@ -257,6 +259,7 @@ function soldOutLast(list: Product[]) {
 }
 
 onLoad(async (options) => {
+  if (blockDisabledH5Customer()) return;
   try {
     await user.ensureLogin();
     const rawScene = String((options as any)?.scene || "");
@@ -268,14 +271,15 @@ onLoad(async (options) => {
     } else {
       await applyTableId((options as any)?.table_id);
     }
-    loadData();
+    await loadData();
+    initialLoadFinished = true;
   } catch (e: any) {
     uni.showToast({ title: `启动失败：${e.message || "未知错误"}`, icon: "none", duration: 5000 });
   }
 });
 
 onShow(() => {
-  loadData();
+  if (initialLoadFinished) loadData();
 });
 
 async function loadData() {

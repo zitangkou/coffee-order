@@ -1,5 +1,10 @@
 <template>
   <view class="page">
+    <view v-if="loading" class="card page-state">订单加载中…</view>
+    <view v-else-if="error" class="card page-state">
+      <view>{{ error }}</view>
+      <view class="btn-outline state-btn" @tap="goOrders">返回订单列表</view>
+    </view>
     <view v-if="order" class="card status-card">
       <view class="pickup-code">{{ order.pickupNo }}</view>
       <view class="pickup-label">取餐码</view>
@@ -81,11 +86,14 @@ import { onLoad, onUnload } from "@dcloudio/uni-app";
 import { api } from "../../api";
 import { ORDER_STATUS_TEXT, type Order, type OrderStatus } from "../../types";
 import StepBar from "../../components/StepBar.vue";
+import { blockDisabledH5Customer } from "../../utils/customerAccess";
 // #ifdef MP-WEIXIN
 import { requestPayment } from "../../utils/platform";
 // #endif
 
 const order = ref<Order | null>(null);
+const loading = ref(true);
+const error = ref("");
 const showRefund = ref(false);
 const paying = ref(false);
 const cancelling = ref(false);
@@ -131,13 +139,21 @@ const canRefund = computed(() => {
 });
 
 onLoad(async (options) => {
+  if (blockDisabledH5Customer()) return;
   const id = Number((options as any)?.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    error.value = "订单参数无效，请从订单列表重新进入";
+    loading.value = false;
+    return;
+  }
   try {
     order.value = await api.getOrder(id);
     prevStatus = order.value.status;
     startPolling(id);
   } catch (e: any) {
-    uni.showToast({ title: e.message || "加载失败", icon: "none" });
+    error.value = e.message || "订单加载失败，请稍后重试";
+  } finally {
+    loading.value = false;
   }
 });
 
@@ -163,6 +179,10 @@ function startPolling(id: number) {
       // 轮询失败静默，下次再试
     }
   }, 10000);
+}
+
+function goOrders() {
+  uni.redirectTo({ url: "/pages/order/list" });
 }
 
 function specsText(specs: Record<string, string | string[]>) {
@@ -249,6 +269,16 @@ async function cancelOrder() {
 </script>
 
 <style lang="scss" scoped>
+.page-state {
+  text-align: center;
+  color: #6b625b;
+  padding: 56rpx 32rpx;
+}
+
+.state-btn {
+  margin-top: 28rpx;
+}
+
 .status-card {
   text-align: center;
   padding: 48rpx 24rpx;

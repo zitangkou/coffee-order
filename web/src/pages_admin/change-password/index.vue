@@ -12,13 +12,17 @@
 </template>
 
 <script setup lang="ts">
+import { onLoad } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import { api } from "../../api";
 import { STORAGE_KEYS } from "../../config";
+import { requireAdminToken } from "../../utils/adminAuth";
 
 const oldPassword = ref("");
 const newPassword = ref("");
 const confirmPassword = ref("");
+
+onLoad(() => requireAdminToken());
 
 async function submit() {
   if (!oldPassword.value || !newPassword.value) {
@@ -37,6 +41,8 @@ async function submit() {
     uni.showLoading({ title: "提交中" });
     const result = await api.adminChangePassword(oldPassword.value, newPassword.value);
     uni.setStorageSync(STORAGE_KEYS.adminToken, result.token);
+    const current = (uni.getStorageSync(STORAGE_KEYS.adminInfo) as Record<string, unknown>) || {};
+    uni.setStorageSync(STORAGE_KEYS.adminInfo, { ...current, mustChangePassword: false });
     uni.hideLoading();
     uni.showToast({ title: "密码已修改", icon: "success" });
     setTimeout(() => uni.redirectTo({ url: "/pages_admin/dashboard/index" }), 600);

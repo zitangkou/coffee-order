@@ -55,7 +55,7 @@
         <view class="o-remark">原因：{{ r.reason }}</view>
         <view class="o-remark">金额：¥{{ r.order.totalAmount }}</view>
         <view class="o-remark">状态：{{ refundStatusText(r.status) }}</view>
-        <view class="actions">
+        <view v-if="isManager" class="actions">
           <view v-if="r.status === 'PENDING'" class="act-btn" @tap="handleRefund(r, 'approved')">{{ handlingRefundId === r.id ? "处理中…" : "同意并原路退款" }}</view>
           <view v-if="r.status === 'PENDING'" class="act-btn danger" @tap="handleRefund(r, 'rejected')">拒绝</view>
           <view v-if="r.status === 'PROCESSING'" class="act-btn" @tap="syncRefund(r)">{{ handlingRefundId === r.id ? "同步中…" : "同步退款状态" }}</view>
@@ -71,6 +71,7 @@ import { onLoad, onUnload } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import { api } from "../../api";
 import { ORDER_STATUS_TEXT, type Order, type OrderStatus } from "../../types";
+import { requireAdminPage } from "../../utils/adminAuth";
 
 const tabs = [
   { label: "待接单", value: "PAID" },
@@ -83,6 +84,7 @@ const activeTab = ref("PAID");
 const orders = ref<Order[]>([]);
 const refunds = ref<any[]>([]);
 const handlingRefundId = ref<number | null>(null);
+const isManager = ref(false);
 let timer: any = null;
 
 function refundStatusText(status: string) {
@@ -111,11 +113,15 @@ async function syncRefund(refund: any) {
 }
 
 onLoad((options) => {
+  const info = requireAdminPage();
+  if (!info) return;
+  isManager.value = info.role === "MANAGER";
   const tab = (options as any)?.tab;
   if (tab && tabs.some((t) => t.value === tab)) {
     activeTab.value = tab;
-    load();
   }
+  load();
+  timer = setInterval(load, 10000);
 });
 
 async function load() {
@@ -136,8 +142,6 @@ function switchTab(v: string) {
   load();
 }
 
-load();
-timer = setInterval(load, 10000);
 onUnload(() => {
   if (timer) clearInterval(timer);
 });

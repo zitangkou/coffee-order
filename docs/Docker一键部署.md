@@ -61,6 +61,8 @@ bash deploy/restore-verify.sh
 bash deploy/monitor.sh
 ```
 
+当前首发范围为微信小程序顾客端，Docker 中的 H5 默认只承载商家后台。访问根路径会进入商家登录页；`VITE_H5_CUSTOMER_ENABLED=false` 应保持不变，待未来正式恢复顾客 H5 并补齐登录、支付方案后再开启。
+
 在服务器本机之外用 `127.0.0.1:8080` 方式调试管理后台时，需要把该本地地址加入 `.env` 的 `CORS_ORIGINS`；线上服务器仍只保留正式 HTTPS 域名。
 
 部署脚本失败时不会自动打印应用日志，避免日志意外包含业务信息。按提示手动查看必要范围：

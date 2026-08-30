@@ -22,22 +22,29 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { api } from "../../api";
-import { STORAGE_KEYS } from "../../config";
+import { clearAdminSession, getAdminInfo, requireAdminPage } from "../../utils/adminAuth";
 
 const stats = ref<any>({});
-const entries = [
+const baseEntries = [
   { icon: "☕", name: "订单管理", url: "/pages_admin/orders/index" },
   { icon: "🍩", name: "商品管理", url: "/pages_admin/products/index" },
   { icon: "🪑", name: "桌台管理", url: "/pages_admin/tables/index" },
   { icon: "📊", name: "数据统计", url: "/pages_admin/stats/index" },
+  { icon: "🔐", name: "修改密码", url: "/pages_admin/change-password/index" },
+];
+const managerEntries = [
   { icon: "⚙️", name: "系统设置", url: "/pages_admin/settings/index" },
   { icon: "👥", name: "管理员", url: "/pages_admin/admins/index" },
 ];
+const entries = computed(() =>
+  getAdminInfo().role === "MANAGER" ? [...baseEntries, ...managerEntries] : baseEntries
+);
 
 onShow(async () => {
+  if (!requireAdminPage()) return;
   try {
     stats.value = await api.adminStatsToday();
   } catch (e: any) {
@@ -58,7 +65,7 @@ function goStats() {
 }
 
 function logout() {
-  uni.removeStorageSync(STORAGE_KEYS.adminToken);
+  clearAdminSession();
   uni.reLaunch({ url: "/pages_admin/login/index" });
 }
 </script>

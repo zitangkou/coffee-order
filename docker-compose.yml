@@ -102,6 +102,7 @@ services:
       dockerfile: Dockerfile.web
       args:
         VITE_API_BASE: ${VITE_API_BASE:-/api}
+        VITE_H5_CUSTOMER_ENABLED: ${VITE_H5_CUSTOMER_ENABLED:-false}
     container_name: coffee-web
     restart: unless-stopped
     depends_on:

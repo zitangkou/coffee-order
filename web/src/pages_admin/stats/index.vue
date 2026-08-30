@@ -76,6 +76,7 @@
 import { ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { api } from "../../api";
+import { requireAdminPage } from "../../utils/adminAuth";
 
 const ranges = [
   { label: "今日", value: "today" },
@@ -91,7 +92,10 @@ const categories = ref<any[]>([]);
 const refunds = ref<any>({});
 let maxHour = 1;
 
-onShow(() => load());
+onShow(() => {
+  if (!requireAdminPage()) return;
+  load();
+});
 
 async function load() {
   try {
@@ -150,7 +154,8 @@ function exportCsv() {
     ["商品", "销量", "销售额"],
     ...ranking.value.map((p) => [p.name, String(p.qty), String(p.amount)]),
   ];
-  const csv = rows.map((r) => r.join(",")).join("\n");
+  const cell = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  const csv = rows.map((r) => r.map(cell).join(",")).join("\n");
   // #ifdef H5
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -158,7 +163,7 @@ function exportCsv() {
   a.href = url;
   a.download = `coffee-stats-${Date.now()}.csv`;
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
   // #endif
   // #ifndef H5
   uni.showToast({ title: "请在电脑端导出 CSV", icon: "none" });

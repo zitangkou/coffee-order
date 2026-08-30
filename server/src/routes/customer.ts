@@ -67,6 +67,7 @@ router.get("/categories", async (_req, res) => {
 
 router.get("/products/:id", async (req, res) => {
   const id = num(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return fail(res, "商品参数无效", 400, 400);
   const product = await prisma.product.findFirst({
     where: { id, isActive: true },
     include: {
@@ -83,7 +84,7 @@ router.get("/products/:id", async (req, res) => {
       },
     },
   });
-  if (!product) return fail(res, "商品不存在或已下架");
+  if (!product) return fail(res, "商品不存在或已下架", 404, 404);
   ok(res, serializeProduct(product));
 });
 

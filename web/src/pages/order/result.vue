@@ -1,8 +1,14 @@
 <template>
   <view class="page result">
-    <view class="card center">
-      <view class="check">✓</view>
-      <view class="title">支付成功</view>
+    <view v-if="loading" class="card center state-card">订单加载中…</view>
+    <view v-else-if="error" class="card center state-card">
+      <view class="title">无法查看订单</view>
+      <view class="sub">{{ error }}</view>
+      <view class="btn-outline back-btn" @tap="goHome">返回首页</view>
+    </view>
+    <view v-else-if="order" class="card center">
+      <view class="check" :class="{ muted: !paymentSucceeded }">{{ paymentSucceeded ? "✓" : "!" }}</view>
+      <view class="title">{{ resultTitle }}</view>
       <view class="sub">订单号 {{ order?.orderNo }}</view>
       <view class="divider" />
       <view class="pickup-label">取餐码</view>
@@ -29,14 +35,28 @@ import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import { api } from "../../api";
 import type { Order } from "../../types";
+import { blockDisabledH5Customer } from "../../utils/customerAccess";
 // #ifdef MP-WEIXIN
 import { WX_SUBSCRIBE_TEMPLATE_READY } from "../../config";
 import { subscribeMessage } from "../../utils/platform";
 // #endif
 
 const order = ref<Order | null>(null);
+const loading = ref(true);
+const error = ref("");
 const subscribing = ref(false);
 const subscribeStatus = ref<"" | "ACCEPTED" | "REJECTED" | "BANNED">("");
+const paymentSucceeded = computed(() =>
+  ["PAID", "MAKING", "READY", "COMPLETED"].includes(order.value?.status || "")
+);
+const resultTitle = computed(() => {
+  if (paymentSucceeded.value) return "支付成功";
+  if (order.value?.status === "REFUNDING") return "退款处理中";
+  if (order.value?.status === "REFUNDED") return "订单已退款";
+  if (order.value?.status === "UNPAID") return "支付待确认";
+  if (order.value?.status === "CANCELLED") return "订单已取消";
+  return "订单状态待确认";
+});
 
 // #ifdef MP-WEIXIN
 const canSubscribe = computed(
@@ -51,11 +71,19 @@ const subscribeButtonText = computed(() => {
 // #endif
 
 onLoad(async (options) => {
+  if (blockDisabledH5Customer()) return;
   const id = Number((options as any)?.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    error.value = "订单参数无效，请从订单列表重新进入";
+    loading.value = false;
+    return;
+  }
   try {
     order.value = await api.getOrder(id);
   } catch (e: any) {
-    uni.showToast({ title: e.message || "加载失败", icon: "none" });
+    error.value = e.message || "订单加载失败，请稍后重试";
+  } finally {
+    loading.value = false;
   }
 });
 
@@ -87,7 +115,7 @@ async function requestSubscribe() {
 // #endif
 
 function goDetail() {
-  uni.redirectTo({ url: `/pages/order/detail?id=${order.value?.id}` });
+  if (order.value) uni.redirectTo({ url: `/pages/order/detail?id=${order.value.id}` });
 }
 
 function goHome() {
@@ -114,6 +142,14 @@ function goHome() {
   font-size: 52rpx;
   line-height: 96rpx;
   margin: 0 auto 24rpx;
+}
+
+.check.muted {
+  background: #8a817a;
+}
+
+.state-card {
+  color: #6b625b;
 }
 
 .title {

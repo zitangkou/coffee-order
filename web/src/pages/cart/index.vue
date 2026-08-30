@@ -36,9 +36,13 @@
 </template>
 
 <script setup lang="ts">
+import { onLoad } from "@dcloudio/uni-app";
 import { useCartStore } from "../../stores/cart";
+import { blockDisabledH5Customer } from "../../utils/customerAccess";
 
 const cart = useCartStore();
+
+onLoad(() => blockDisabledH5Customer());
 
 function specsText(specs: Record<string, string | string[]>) {
   return Object.values(specs)

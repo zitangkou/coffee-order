@@ -1,5 +1,7 @@
 <template>
   <view class="page">
+    <view v-if="loading" class="empty">会员信息加载中…</view>
+    <view v-else-if="error" class="card empty">{{ error }}</view>
     <view v-if="profile" class="card hero">
       <view class="avatar">{{ profile.user.nickname?.slice(0, 1) || "咖" }}</view>
       <view class="hero-info">
@@ -64,9 +66,7 @@
       <text class="dot">·</text>
       <text @tap="goLegal('terms')">用户服务协议</text>
     </view>
-    <view class="deactivate" @tap="deactivate">注销账号</view>
-
-    <view v-if="!profile" class="empty">加载中...</view>
+    <view v-if="profile" class="deactivate" @tap="deactivate">注销账号</view>
   </view>
 </template>
 
@@ -76,9 +76,12 @@ import { onLoad, onUnload } from "@dcloudio/uni-app";
 import { api } from "../../api";
 import { useUserStore } from "../../stores/user";
 import { ORDER_STATUS_TEXT, type OrderStatus } from "../../types";
+import { blockDisabledH5Customer } from "../../utils/customerAccess";
 
 const user = useUserStore();
 const profile = ref<any>(null);
+const loading = ref(true);
+const error = ref("");
 const phone = ref("");
 const code = ref("");
 const countdown = ref(0);
@@ -91,8 +94,20 @@ const lastOrderText = computed(() =>
 );
 
 onLoad(async () => {
-  await user.ensureLogin();
-  load();
+  if (blockDisabledH5Customer()) return;
+  try {
+    await user.ensureLogin();
+  } catch (e: any) {
+    error.value = e.message || "微信登录失败，请重新进入小程序";
+    loading.value = false;
+    return;
+  }
+  if (!user.token) {
+    error.value = "当前仅支持在微信小程序登录后查看会员信息";
+    loading.value = false;
+    return;
+  }
+  await load();
 });
 
 onUnload(() => {
@@ -100,10 +115,14 @@ onUnload(() => {
 });
 
 async function load() {
+  loading.value = true;
+  error.value = "";
   try {
     profile.value = await api.userProfile();
   } catch (e: any) {
-    uni.showToast({ title: e.message || "加载失败", icon: "none" });
+    error.value = e.message || "会员信息加载失败，请稍后重试";
+  } finally {
+    loading.value = false;
   }
 }
 

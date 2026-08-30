@@ -1,5 +1,10 @@
 <template>
   <view class="page">
+    <view v-if="!cart.items.length" class="card empty-order">
+      <view>购物车还是空的</view>
+      <view class="btn-outline empty-btn" @tap="goHome">返回菜单选购</view>
+    </view>
+    <template v-else>
     <view class="card">
       <view class="row">
         <text class="label">用餐方式</text>
@@ -77,6 +82,7 @@
         </view>
       </view>
     </view>
+    </template>
   </view>
 </template>
 
@@ -87,6 +93,7 @@ import { api } from "../../api";
 import { useCartStore } from "../../stores/cart";
 import { useUserStore } from "../../stores/user";
 import type { Table } from "../../types";
+import { blockDisabledH5Customer } from "../../utils/customerAccess";
 // #ifdef MP-WEIXIN
 import { requestPayment } from "../../utils/platform";
 // #endif
@@ -110,7 +117,13 @@ const totalAmount = computed(
 );
 
 onLoad(async () => {
-  await user.ensureLogin();
+  if (blockDisabledH5Customer()) return;
+  try {
+    await user.ensureLogin();
+  } catch (e: any) {
+    uni.showToast({ title: e.message || "微信登录失败，请重新进入小程序", icon: "none" });
+    return;
+  }
   try {
     const [ts, s] = await Promise.all([api.getTables(), api.getShop()]);
     tables.value = ts;
@@ -137,6 +150,10 @@ function specsText(specs: Record<string, string | string[]>) {
 
 async function submit() {
   if (isSubmitting.value) return;
+  if (!user.token) {
+    uni.showToast({ title: "当前仅支持在微信小程序下单", icon: "none" });
+    return;
+  }
   if (!cart.items.length) {
     uni.showToast({ title: "购物车是空的", icon: "none" });
     return;
@@ -203,6 +220,10 @@ async function submit() {
   }
 }
 
+function goHome() {
+  uni.reLaunch({ url: "/pages/index/index" });
+}
+
 async function waitForPaid(orderId: number) {
   for (let i = 0; i < 12; i += 1) {
     const current = await api.confirmPayment(orderId);
@@ -217,6 +238,16 @@ async function waitForPaid(orderId: number) {
 </script>
 
 <style lang="scss" scoped>
+.empty-order {
+  text-align: center;
+  color: #6b625b;
+  padding: 56rpx 32rpx;
+}
+
+.empty-btn {
+  margin-top: 28rpx;
+}
+
 .row {
   display: flex;
   align-items: center;

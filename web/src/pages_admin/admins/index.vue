@@ -51,6 +51,7 @@ import { ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { api } from "../../api";
 import { STORAGE_KEYS } from "../../config";
+import { requireAdminPage } from "../../utils/adminAuth";
 
 const admins = ref<any[]>([]);
 const logs = ref<any[]>([]);
@@ -62,7 +63,10 @@ function onRoleChange(e: any) {
   newRole.value = Number(e.detail.value) === 1 ? "MANAGER" : "STAFF";
 }
 
-onShow(load);
+onShow(() => {
+  if (!requireAdminPage(true)) return;
+  load();
+});
 
 async function load() {
   try {

@@ -1,5 +1,8 @@
 import { API_BASE, STORAGE_KEYS } from "../config";
 import { IS_MP_WEIXIN } from "./platform";
+// #ifdef H5
+import { redirectAdminLogin, redirectChangePassword } from "./adminAuth";
+// #endif
 
 export interface RequestOptions {
   url: string;
@@ -32,6 +35,23 @@ export function request<T>(options: RequestOptions): Promise<T> {
         if (body && body.code === 0) {
           resolve(body.data);
         } else {
+          // #ifdef H5
+          if (options.admin && res.statusCode === 401) {
+            redirectAdminLogin(body?.msg || "登录状态已失效");
+          } else if (
+            options.admin &&
+            res.statusCode === 403 &&
+            body?.msg?.includes("必须先修改密码")
+          ) {
+            redirectChangePassword(body.msg);
+          }
+          // #endif
+          if (!options.admin && res.statusCode === 401) {
+            uni.removeStorageSync(STORAGE_KEYS.userToken);
+            uni.removeStorageSync(STORAGE_KEYS.userId);
+            uni.showToast({ title: "登录状态已失效，请重新进入", icon: "none" });
+            uni.reLaunch({ url: "/pages/index/index" });
+          }
           reject(new Error(body?.msg || "请求失败"));
         }
       },

@@ -1,5 +1,11 @@
 <template>
   <view class="page detail">
+    <view v-if="loading" class="card page-state">商品加载中…</view>
+    <view v-else-if="error" class="card page-state">
+      <view>{{ error }}</view>
+      <view class="btn-outline state-btn" @tap="goBack">返回菜单</view>
+    </view>
+    <template v-else-if="product">
     <view class="img">
       <image v-if="product?.imageUrl" :src="assetUrl(product.imageUrl)" mode="aspectFill" class="img-main" />
       <text v-else class="img-text">{{ product?.name?.slice(0, 1) || "☕" }}</text>
@@ -61,6 +67,7 @@
       </view>
       <view class="cart-btn" @tap="addToCart">加入购物车</view>
     </view>
+    </template>
   </view>
 </template>
 
@@ -71,8 +78,11 @@ import { api } from "../../api";
 import { useCartStore } from "../../stores/cart";
 import type { Product, SpecGroup, SpecOption } from "../../types";
 import { assetUrl } from "../../utils/assets";
+import { blockDisabledH5Customer } from "../../utils/customerAccess";
 
 const product = ref<Product | null>(null);
+const loading = ref(true);
+const error = ref("");
 const quantity = ref(1);
 const remark = ref("");
 const selections = ref<Record<string, string[]>>({});
@@ -96,12 +106,20 @@ const unitPrice = computed(() => {
 });
 
 onLoad(async (options) => {
+  if (blockDisabledH5Customer()) return;
   const id = Number((options as any)?.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    error.value = "商品参数无效，请从菜单重新进入";
+    loading.value = false;
+    return;
+  }
   try {
     product.value = await api.getProduct(id);
     initSelections();
   } catch (e: any) {
-    uni.showToast({ title: e.message || "加载失败", icon: "none" });
+    error.value = e.message || "商品加载失败，请稍后重试";
+  } finally {
+    loading.value = false;
   }
 });
 
@@ -165,13 +183,24 @@ function addToCart() {
 }
 
 function goBack() {
-  uni.navigateBack();
+  if (getCurrentPages().length > 1) uni.navigateBack();
+  else uni.reLaunch({ url: "/pages/index/index" });
 }
 </script>
 
 <style lang="scss" scoped>
 .detail {
   padding-bottom: 180rpx;
+}
+
+.page-state {
+  text-align: center;
+  color: #6b625b;
+  padding: 56rpx 32rpx;
+}
+
+.state-btn {
+  margin-top: 28rpx;
 }
 
 .img {

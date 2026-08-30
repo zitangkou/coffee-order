@@ -34,6 +34,10 @@ export const STORAGE_KEYS = {
   adminInfo: "admin_info",
 };
 
+// 当前发布目标仅为微信小程序；H5 默认仅承载商家后台。
+export const H5_CUSTOMER_ENABLED: boolean =
+  import.meta.env.VITE_H5_CUSTOMER_ENABLED === "true";
+
 // 微信订阅消息模板通过私密构建环境注入，不提交到仓库；未配置时跳过订阅引导。
 export const WX_SUBSCRIBE_TEMPLATE_READY: string =
   import.meta.env.VITE_WX_SUBSCRIBE_TEMPLATE_READY || "";

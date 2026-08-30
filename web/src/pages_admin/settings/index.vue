@@ -57,6 +57,7 @@ import { reactive, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { api } from "../../api";
 import { STORAGE_KEYS } from "../../config";
+import { requireAdminPage } from "../../utils/adminAuth";
 
 const form = reactive<Record<string, any>>({
   name: "",
@@ -75,6 +76,7 @@ const newPassword = ref("");
 const confirmPassword = ref("");
 
 onShow(async () => {
+  if (!requireAdminPage(true)) return;
   try {
     const s = await api.adminSettings();
     if (s) Object.assign(form, s);
@@ -120,6 +122,8 @@ async function changePassword() {
   try {
     const result = await api.adminChangePassword(oldPassword.value, newPassword.value);
     uni.setStorageSync(STORAGE_KEYS.adminToken, result.token);
+    const current = (uni.getStorageSync(STORAGE_KEYS.adminInfo) as Record<string, unknown>) || {};
+    uni.setStorageSync(STORAGE_KEYS.adminInfo, { ...current, mustChangePassword: false });
     oldPassword.value = "";
     newPassword.value = "";
     confirmPassword.value = "";
