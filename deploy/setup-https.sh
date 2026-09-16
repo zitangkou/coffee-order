@@ -14,6 +14,7 @@ compose_env_value() {
 
 PUBLIC_URL="${WEB_BASE_URL:-$(compose_env_value WEB_BASE_URL)}"
 EMAIL="${LETSENCRYPT_EMAIL:-$(compose_env_value LETSENCRYPT_EMAIL)}"
+WITHOUT_EMAIL="${LETSENCRYPT_WITHOUT_EMAIL:-$(compose_env_value LETSENCRYPT_WITHOUT_EMAIL)}"
 HTTP_PORT_VALUE="${HTTP_PORT:-$(compose_env_value HTTP_PORT)}"
 DOMAIN="${PUBLIC_URL#*://}"
 DOMAIN="${DOMAIN%%/*}"
@@ -21,10 +22,6 @@ DOMAIN="${DOMAIN%%:*}"
 
 if [[ ! "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || [[ "$DOMAIN" != *.* ]]; then
   echo "[https] WEB_BASE_URL 中的域名无效"
-  exit 1
-fi
-if [[ ! "$EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; then
-  echo "[https] 请先在 .env 填写 LETSENCRYPT_EMAIL"
   exit 1
 fi
 if ! [[ "${HTTP_PORT_VALUE:-8080}" =~ ^[0-9]+$ ]]; then
@@ -56,8 +53,17 @@ $SUDO systemctl reload nginx
 
 CERT_DIR="/etc/letsencrypt/live/$DOMAIN"
 if [ ! -s "$CERT_DIR/fullchain.pem" ] || [ ! -s "$CERT_DIR/privkey.pem" ]; then
-  $SUDO certbot certonly --webroot -w "$ACME_ROOT" -d "$DOMAIN" \
-    --non-interactive --agree-tos --email "$EMAIL" --keep-until-expiring
+  if [[ "$EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; then
+    $SUDO certbot certonly --webroot -w "$ACME_ROOT" -d "$DOMAIN" \
+      --non-interactive --agree-tos --email "$EMAIL" --keep-until-expiring
+  elif [ "${WITHOUT_EMAIL:-false}" = "true" ]; then
+    echo "[https] 未配置通知邮箱，使用无邮箱模式签发；请上线后补登记邮箱"
+    $SUDO certbot certonly --webroot -w "$ACME_ROOT" -d "$DOMAIN" \
+      --non-interactive --agree-tos --register-unsafely-without-email --keep-until-expiring
+  else
+    echo "[https] 请填写 LETSENCRYPT_EMAIL，或显式设置 LETSENCRYPT_WITHOUT_EMAIL=true"
+    exit 1
+  fi
 fi
 
 sed \
