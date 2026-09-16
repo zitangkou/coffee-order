@@ -16,10 +16,12 @@ on_error() {
 trap on_error ERR
 
 WITH_HTTPS=false
+WITH_ADMIN_HTTPS=false
 SKIP_BUILD=false
 for arg in "$@"; do
   case "$arg" in
     --with-https) WITH_HTTPS=true ;;
+    --with-admin-https) WITH_ADMIN_HTTPS=true ;;
     --skip-build) SKIP_BUILD=true ;;
     *) echo "未知参数：$arg"; exit 2 ;;
   esac
@@ -216,6 +218,11 @@ fi
 if [ "$WITH_HTTPS" = true ]; then
   CURRENT_STAGE="HTTPS 网关配置"
   bash deploy/setup-https.sh
+fi
+
+if [ "$WITH_ADMIN_HTTPS" = true ]; then
+  CURRENT_STAGE="电脑管理端 HTTPS 网关配置"
+  bash deploy/setup-admin-https.sh
 fi
 
 if [ "${RUN_SERVER_SECURITY_CHECK_VALUE:-false}" = "true" ]; then
