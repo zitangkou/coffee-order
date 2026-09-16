@@ -16,21 +16,31 @@ RETENTION_DAYS="${RETENTION_DAYS:-14}"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 FILE="$BACKUP_DIR/coffee_os_$STAMP.sql.gz"
 UPLOAD_FILE="$BACKUP_DIR/coffee_uploads_$STAMP.tar.gz"
+TMP_FILE="$FILE.tmp"
+TMP_UPLOAD_FILE="$UPLOAD_FILE.tmp"
 
 umask 077
 mkdir -p "$BACKUP_DIR"
+cleanup() {
+  rm -f "$TMP_FILE" "$TMP_UPLOAD_FILE"
+}
+trap cleanup EXIT
 
 docker compose exec -T mysql \
   sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysqldump -ucoffee --single-transaction --quick --routines --triggers --no-tablespaces coffee_os' \
-  | gzip > "$FILE"
+  | gzip > "$TMP_FILE"
 
-gzip -t "$FILE"
+gzip -t "$TMP_FILE"
+mv "$TMP_FILE" "$FILE"
 sha256sum "$FILE" > "$FILE.sha256"
 
 # 上传目录与数据库使用同一时间戳，恢复时可按备份对配套取用。
-docker compose exec -T server tar -C /app/uploads -czf - . > "$UPLOAD_FILE"
-gzip -t "$UPLOAD_FILE"
-tar -tzf "$UPLOAD_FILE" >/dev/null
+# 使用一次性容器直接挂载 uploads 卷，API 停止时仍可备份。
+docker compose run --rm --no-deps --entrypoint tar server \
+  -C /app/uploads -czf - . > "$TMP_UPLOAD_FILE"
+gzip -t "$TMP_UPLOAD_FILE"
+tar -tzf "$TMP_UPLOAD_FILE" >/dev/null
+mv "$TMP_UPLOAD_FILE" "$UPLOAD_FILE"
 sha256sum "$UPLOAD_FILE" > "$UPLOAD_FILE.sha256"
 
 # 清理超过保留天数的旧备份
