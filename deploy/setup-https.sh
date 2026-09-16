@@ -43,10 +43,15 @@ restore_http() {
   $SUDO cp "$BOOTSTRAP_FILE" "$SITE_FILE"
   $SUDO nginx -t
   $SUDO systemctl reload nginx
+  consecutive_ok=0
   for _ in {1..10}; do
-    if curl -fsS -H "Host: $DOMAIN" --connect-timeout 2 --max-time 5 \
-      "http://127.0.0.1/api/health/ready" >/dev/null; then
-      return 0
+    status="$(curl -sS -o /dev/null -w '%{http_code}' -H "Host: $DOMAIN" \
+      --connect-timeout 2 --max-time 5 "http://127.0.0.1/api/health/ready" || true)"
+    if [ "$status" = "200" ]; then
+      consecutive_ok=$((consecutive_ok + 1))
+      if [ "$consecutive_ok" -ge 2 ]; then return 0; fi
+    else
+      consecutive_ok=0
     fi
     sleep 1
   done
