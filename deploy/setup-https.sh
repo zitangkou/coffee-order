@@ -39,6 +39,21 @@ SITE_LINK="/etc/nginx/sites-enabled/coffee-${DOMAIN}.conf"
 ACME_ROOT="/var/www/letsencrypt"
 $SUDO mkdir -p "$ACME_ROOT"
 
+restore_http() {
+  $SUDO cp "$BOOTSTRAP_FILE" "$SITE_FILE"
+  $SUDO nginx -t
+  $SUDO systemctl reload nginx
+  for _ in {1..10}; do
+    if curl -fsS -H "Host: $DOMAIN" --connect-timeout 2 --max-time 5 \
+      "http://127.0.0.1/api/health/ready" >/dev/null; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "[https] HTTP 回退后的 readiness 校验失败，请立即检查 Nginx"
+  return 1
+}
+
 BOOTSTRAP_FILE="$(mktemp)"
 FINAL_FILE="$(mktemp)"
 trap 'rm -f "$BOOTSTRAP_FILE" "$FINAL_FILE"' EXIT
@@ -79,17 +94,13 @@ $SUDO systemctl enable --now certbot.timer 2>/dev/null || true
 if ! curl -fsS --resolve "$DOMAIN:443:127.0.0.1" --connect-timeout 5 --max-time 15 \
   "https://$DOMAIN/api/health/ready" >/dev/null; then
   echo "[https] 本机 HTTPS 校验失败，正在恢复 HTTP 配置"
-  $SUDO cp "$BOOTSTRAP_FILE" "$SITE_FILE"
-  $SUDO nginx -t
-  $SUDO systemctl reload nginx
+  restore_http || true
   exit 1
 fi
 
 if ! curl -fsS --connect-timeout 10 --max-time 20 "https://$DOMAIN/api/health/ready" >/dev/null; then
   echo "[https] 公网 HTTPS 尚不可达，可能是云安全组未放行 443；已恢复 HTTP 入口"
-  $SUDO cp "$BOOTSTRAP_FILE" "$SITE_FILE"
-  $SUDO nginx -t
-  $SUDO systemctl reload nginx
+  restore_http || true
   exit 1
 fi
 
