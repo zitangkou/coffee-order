@@ -24,6 +24,7 @@ export const useAuthStore = defineStore("auth", {
       this.admin = admin;
       localStorage.setItem("admin_token", token);
       localStorage.setItem("admin_info", JSON.stringify(admin));
+      localStorage.setItem("admin_last_activity", String(Date.now()));
     },
     updatePasswordSession(token: string) {
       if (!this.admin) return;
@@ -34,6 +35,7 @@ export const useAuthStore = defineStore("auth", {
       this.admin = null;
       localStorage.removeItem("admin_token");
       localStorage.removeItem("admin_info");
+      localStorage.removeItem("admin_last_activity");
     },
   },
 });

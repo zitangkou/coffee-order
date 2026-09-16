@@ -4,7 +4,7 @@
       <span>{{ label }}</span
       ><span class="kpi-icon" :class="tone">{{ icon }}</span>
     </div>
-    <strong>{{ prefix }}{{ value }}</strong>
+    <strong>{{ prefix }}{{ value }}{{ suffix }}</strong>
     <div class="kpi-foot">{{ hint }}</div>
   </article>
 </template>
@@ -13,6 +13,7 @@ defineProps<{
   label: string;
   value: string | number;
   prefix?: string;
+  suffix?: string;
   hint: string;
   icon: string;
   tone?: string;

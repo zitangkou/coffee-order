@@ -152,6 +152,9 @@ export async function confirmWechatPayment(event: any): Promise<void> {
           status: "SUCCESS",
         },
       });
+      await tx.orderStatusLog.create({
+        data: { orderId: order.id, status: "PAID", source: "WECHAT" },
+      });
       return true;
     });
   } catch (error: any) {
@@ -221,15 +224,17 @@ export async function confirmWechatRefund(event: any): Promise<void> {
       },
     });
     if (state === "SUCCESS") {
-      await tx.order.updateMany({
+      const changed = await tx.order.updateMany({
         where: { id: refund.orderId, status: "REFUNDING" },
         data: { status: "REFUNDED", refundedAt: new Date() },
       });
+      if (changed.count) await tx.orderStatusLog.create({ data: { orderId: refund.orderId, status: "REFUNDED", source: "WECHAT" } });
     } else if (state === "FAILED") {
-      await tx.order.updateMany({
+      const changed = await tx.order.updateMany({
         where: { id: refund.orderId, status: "REFUNDING" },
         data: { status: refund.statusBefore as any },
       });
+      if (changed.count) await tx.orderStatusLog.create({ data: { orderId: refund.orderId, status: refund.statusBefore as any, source: "WECHAT" } });
     }
   });
 }

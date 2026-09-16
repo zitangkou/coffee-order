@@ -16,7 +16,8 @@ export async function http<T>(
 ): Promise<T> {
   const token = localStorage.getItem("admin_token");
   const headers = new Headers(options.headers);
-  if (options.body) headers.set("Content-Type", "application/json");
+  if (options.body && !(options.body instanceof FormData))
+    headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   let response: Response;

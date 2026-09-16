@@ -74,6 +74,7 @@ import {
   Setting,
   UserFilled,
   Wallet,
+  Present,
 } from "@element-plus/icons-vue";
 import { useAuthStore } from "../stores/auth";
 
@@ -87,6 +88,7 @@ const menu = [
   { path: "/products", label: "商品中心", icon: Goods },
   { path: "/tables", label: "桌台与取餐码", icon: Operation },
   { path: "/members", label: "会员管理", icon: UserFilled },
+  { path: "/marketing", label: "营销运营", icon: Present, managerOnly: true },
   { path: "/analytics", label: "数据分析", icon: DataAnalysis },
   { path: "/settings", label: "门店设置", icon: Setting, managerOnly: true },
   { path: "/admins", label: "员工与权限", icon: Wallet, managerOnly: true },

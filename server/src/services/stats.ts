@@ -7,7 +7,7 @@ import {
   shiftBusinessDate,
 } from "../lib/businessTime.js";
 
-const PAID_STATUSES = ["PAID", "MAKING", "READY", "COMPLETED"] as const;
+const PAID_STATUSES = ["PAID", "MAKING", "READY", "COMPLETED", "REFUNDED"] as const;
 
 function rangeFor(unit: "today" | "week" | "month") {
   return businessRange(unit);
@@ -48,9 +48,14 @@ export async function summary(unit: "today" | "week" | "month") {
 
 export async function productRanking(unit: "today" | "week" | "month" = "today") {
   const { start, end } = rangeFor(unit);
+  return productRankingBetween(start, end);
+}
+
+export async function productRankingBetween(start: Date, end: Date) {
   const orders = await paidOrdersBetween(start, end);
   const map = new Map<number, { name: string; qty: number; amount: number }>();
   for (const order of orders) {
+    if (order.status === "REFUNDED") continue;
     for (const item of order.items) {
       const cur = map.get(item.productId) ?? {
         name: item.productName,
@@ -75,10 +80,14 @@ export async function productRanking(unit: "today" | "week" | "month" = "today")
 
 export async function hourlyDistribution(date = new Date()) {
   const { start, end } = businessDayRange(date);
+  return hourlyDistributionBetween(start, end);
+}
+
+export async function hourlyDistributionBetween(start: Date, end: Date) {
   const orders = await paidOrdersBetween(start, end);
   const buckets = new Array(24).fill(0) as number[];
   for (const o of orders) {
-    buckets[businessHour(o.createdAt)] += 1;
+    buckets[businessHour(o.paidAt ?? o.createdAt)] += 1;
   }
   return buckets.map((count, hour) => ({ hour: `${String(hour).padStart(2, "0")}:00`, count }));
 }
@@ -101,12 +110,17 @@ export async function trend(days: number) {
 
 export async function categoryShare(unit: "today" | "week" | "month" = "today") {
   const { start, end } = rangeFor(unit);
+  return categoryShareBetween(start, end);
+}
+
+export async function categoryShareBetween(start: Date, end: Date) {
   const orders = await prisma.order.findMany({
     where: { status: { in: [...PAID_STATUSES] }, paidAt: { gte: start, lte: end } },
     include: { items: { include: { product: { include: { category: true } } } } },
   });
   const map = new Map<string, { revenue: number; qty: number }>();
   for (const order of orders) {
+    if (order.status === "REFUNDED") continue;
     for (const item of order.items) {
       const cat = item.product?.category?.name ?? "未分类";
       const cur = map.get(cat) ?? { revenue: 0, qty: 0 };
@@ -142,5 +156,33 @@ export async function refundStats(unit: "today" | "week" | "month" = "today") {
   return {
     count: refunds.length,
     amount: Math.round(amount * 100) / 100,
+  };
+}
+
+export async function customOverview(start: Date, end: Date) {
+  const orders = await paidOrdersBetween(start, end);
+  const grossRevenue = orders.reduce((sum, order) => sum + Number(order.totalAmount), 0);
+  const refunds = await prisma.refund.findMany({
+    where: { status: "SUCCESS", updatedAt: { gte: start, lte: end } },
+    include: { order: true },
+  });
+  const refundAmount = refunds.reduce(
+    (sum, refund) => sum + Number(refund.refundAmount ?? refund.order?.totalAmount ?? 0),
+    0
+  );
+  const dineInCount = orders.filter((order) => order.orderType === "DINE_IN").length;
+  const takeoutCount = orders.length - dineInCount;
+  return {
+    startAt: start.toISOString(),
+    endAt: end.toISOString(),
+    grossRevenue: Math.round(grossRevenue * 100) / 100,
+    refundAmount: Math.round(refundAmount * 100) / 100,
+    netRevenue: Math.round((grossRevenue - refundAmount) * 100) / 100,
+    orderCount: orders.length,
+    avgTicket: orders.length ? Math.round((grossRevenue / orders.length) * 100) / 100 : 0,
+    refundCount: refunds.length,
+    refundRate: orders.length ? Math.round((refunds.length / orders.length) * 10000) / 100 : 0,
+    dineInCount,
+    takeoutCount,
   };
 }

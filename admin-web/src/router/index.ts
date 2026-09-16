@@ -5,8 +5,14 @@ const AdminLayout = () => import("../layouts/AdminLayout.vue");
 const LoginView = () => import("../views/LoginView.vue");
 const DashboardView = () => import("../views/DashboardView.vue");
 const OrdersView = () => import("../views/OrdersView.vue");
+const ProductsView = () => import("../views/ProductsView.vue");
+const TablesView = () => import("../views/TablesView.vue");
+const AdminsView = () => import("../views/AdminsView.vue");
+const SettingsView = () => import("../views/SettingsView.vue");
+const MembersView = () => import("../views/MembersView.vue");
+const AnalyticsView = () => import("../views/AnalyticsView.vue");
+const MarketingView = () => import("../views/MarketingView.vue");
 const ChangePasswordView = () => import("../views/ChangePasswordView.vue");
-const PlaceholderView = () => import("../views/PlaceholderView.vue");
 
 const router = createRouter({
   history: createWebHistory(),
@@ -34,33 +40,38 @@ const router = createRouter({
         { path: "orders", component: OrdersView, meta: { title: "订单中心" } },
         {
           path: "products",
-          component: PlaceholderView,
-          meta: { title: "商品中心", module: "products" },
+          component: ProductsView,
+          meta: { title: "商品中心" },
         },
         {
           path: "tables",
-          component: PlaceholderView,
-          meta: { title: "桌台与取餐码", module: "tables" },
+          component: TablesView,
+          meta: { title: "桌台与取餐码" },
         },
         {
           path: "members",
-          component: PlaceholderView,
-          meta: { title: "会员管理", module: "members" },
+          component: MembersView,
+          meta: { title: "会员管理" },
         },
         {
           path: "analytics",
-          component: PlaceholderView,
-          meta: { title: "数据分析", module: "analytics" },
+          component: AnalyticsView,
+          meta: { title: "数据分析" },
+        },
+        {
+          path: "marketing",
+          component: MarketingView,
+          meta: { title: "营销运营", managerOnly: true },
         },
         {
           path: "settings",
-          component: PlaceholderView,
-          meta: { title: "门店设置", managerOnly: true, module: "settings" },
+          component: SettingsView,
+          meta: { title: "门店设置", managerOnly: true },
         },
         {
           path: "admins",
-          component: PlaceholderView,
-          meta: { title: "员工与权限", managerOnly: true, module: "admins" },
+          component: AdminsView,
+          meta: { title: "员工与权限", managerOnly: true },
         },
       ],
     },

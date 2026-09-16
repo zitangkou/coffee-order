@@ -18,16 +18,35 @@
           @change="changeStatus"
         />
         <el-input
-          v-model="keyword"
+          v-model="filters.keyword"
           clearable
-          placeholder="搜索订单号或取餐码"
+          placeholder="订单号、取餐码、手机后四位"
           class="order-search"
+          @keyup.enter="applyFilters"
         />
+      </div>
+      <div v-if="status !== 'REFUNDS'" class="order-filters">
+        <el-select v-model="filters.orderType" clearable placeholder="全部用餐方式">
+          <el-option label="堂食" value="DINE_IN" />
+          <el-option label="外带" value="TAKEOUT" />
+        </el-select>
+        <el-select v-model="filters.tableId" clearable placeholder="全部桌台">
+          <el-option v-for="table in tables" :key="table.id" :label="table.tableNo" :value="table.id" />
+        </el-select>
+        <el-date-picker
+          v-model="filters.dateRange"
+          type="datetimerange"
+          start-placeholder="开始时间"
+          end-placeholder="结束时间"
+          range-separator="至"
+        />
+        <el-button type="primary" @click="applyFilters">查询</el-button>
+        <el-button @click="resetFilters">重置</el-button>
       </div>
       <template v-if="status !== 'REFUNDS'">
         <el-table
           v-loading="loading"
-          :data="filteredOrders"
+          :data="orders"
           height="calc(100vh - 300px)"
           stripe
           @row-click="openDetails"
@@ -120,28 +139,38 @@
               refundText(row.status)
             }}</template></el-table-column
           >
-          <el-table-column v-if="auth.isManager" label="操作" width="170"
-            ><template #default="{ row }"
-              ><template v-if="row.status === 'PENDING'"
-                ><el-button type="primary" link @click="approveRefund(row)"
-                  >同意退款</el-button
-                ><el-button type="danger" link @click="rejectRefund(row)"
-                  >拒绝</el-button
-                ></template
-              ></template
-            ></el-table-column
-          >
+          <el-table-column v-if="auth.isManager" label="操作" width="220">
+            <template #default="{ row }">
+              <template v-if="row.status === 'PENDING'">
+                <el-button type="primary" link @click="approveRefund(row)">同意退款</el-button>
+                <el-button type="danger" link @click="rejectRefund(row)">拒绝</el-button>
+              </template>
+              <el-button
+                v-if="['PROCESSING', 'FAILED'].includes(row.status)"
+                link
+                type="primary"
+                :loading="syncingRefundId === row.id"
+                @click="syncRefund(row)"
+              >同步状态</el-button>
+            </template>
+          </el-table-column>
         </el-table>
       </template>
     </article>
 
-    <el-drawer v-model="drawer" title="订单详情" size="520px">
+    <el-drawer v-model="drawer" title="订单详情" size="560px">
       <template v-if="selected"
         ><div class="drawer-status">
           <StatusBadge :status="selected.status" /><strong>{{
             selected.pickupNo
           }}</strong
           ><span>取餐码</span>
+        </div>
+        <div class="drawer-actions">
+          <el-button :loading="printing" @click="reprintSelected">重新打印</el-button>
+          <el-button v-if="nextAction(selected.status)" type="primary" @click="advance(selected)">
+            {{ nextAction(selected.status)?.label }}
+          </el-button>
         </div>
         <el-descriptions :column="1" border
           ><el-descriptions-item label="订单号">{{
@@ -176,6 +205,45 @@
             <span>订单合计</span
             ><strong>¥{{ money(selected.totalAmount) }}</strong>
           </div>
+        </div>
+        <div class="drawer-section">
+          <h3>支付与退款时间线</h3>
+          <el-timeline>
+            <template v-if="selected.statusLogs?.length">
+              <el-timeline-item
+                v-for="log in selected.statusLogs"
+                :key="`status-${log.id}`"
+                :timestamp="formatTime(log.createdAt)"
+                type="primary"
+              >订单状态：{{ statusText(log.status) }} · {{ sourceText(log.source) }}</el-timeline-item>
+            </template>
+            <el-timeline-item v-else :timestamp="formatTime(selected.createdAt)" type="primary">订单创建</el-timeline-item>
+            <el-timeline-item
+              v-for="payment in selected.payments || []"
+              :key="`payment-${payment.id}`"
+              :timestamp="formatTime(payment.createdAt)"
+              :type="payment.status === 'SUCCESS' ? 'success' : 'warning'"
+            >
+              {{ payment.channel }} 支付 {{ payment.status }} · ¥{{ money(payment.amount) }}
+            </el-timeline-item>
+            <el-timeline-item
+              v-for="refund in selected.refunds || []"
+              :key="`refund-${refund.id}`"
+              :timestamp="formatTime(refund.updatedAt || refund.createdAt)"
+              :type="refund.status === 'SUCCESS' ? 'success' : refund.status === 'FAILED' ? 'danger' : 'warning'"
+            >
+              退款 {{ refundText(refund.status) }} · ¥{{ money(refund.refundAmount ?? selected.totalAmount) }}
+              <small v-if="refund.failureReason || refund.rejectReason">{{ refund.failureReason || refund.rejectReason }}</small>
+            </el-timeline-item>
+            <el-timeline-item
+              v-for="audit in selected.auditLogs || []"
+              :key="`audit-${audit.id}`"
+              :timestamp="formatTime(audit.createdAt)"
+            >后台操作：{{ audit.action }} · {{ audit.admin?.username || '系统' }}<small v-if="audit.detail">{{ audit.detail }}</small></el-timeline-item>
+            <el-timeline-item :timestamp="formatTime(selected.updatedAt || selected.createdAt)">
+              当前状态：{{ selected.status }}
+            </el-timeline-item>
+          </el-timeline>
         </div></template
       >
     </el-drawer>
@@ -183,7 +251,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useRoute } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import "element-plus/es/components/message/style/css";
@@ -191,19 +259,27 @@ import "element-plus/es/components/message-box/style/css";
 import { api } from "../api";
 import StatusBadge from "../components/StatusBadge.vue";
 import { useAuthStore } from "../stores/auth";
-import type { Order } from "../types";
+import type { Order, TableInfo } from "../types";
 
 const route = useRoute();
 const auth = useAuthStore();
 const loading = ref(false);
 const status = ref(String(route.query.status || "PAID"));
-const keyword = ref("");
 const orders = ref<Order[]>([]);
 const refunds = ref<any[]>([]);
+const tables = ref<TableInfo[]>([]);
+const filters = reactive<{
+  keyword: string;
+  orderType: string;
+  tableId?: number;
+  dateRange: [Date, Date] | null;
+}>({ keyword: "", orderType: "", tableId: undefined, dateRange: null });
 const page = ref(1);
 const total = ref(0);
 const drawer = ref(false);
 const selected = ref<Order | null>(null);
+const syncingRefundId = ref<number>();
+const printing = ref(false);
 let timer: number | undefined;
 const statusOptions = [
   { label: "待接单", value: "PAID" },
@@ -212,16 +288,6 @@ const statusOptions = [
   { label: "已完成", value: "COMPLETED" },
   { label: "退款", value: "REFUNDS" },
 ];
-const filteredOrders = computed(() => {
-  const q = keyword.value.trim().toLowerCase();
-  return q
-    ? orders.value.filter(
-        (o) =>
-          o.orderNo.toLowerCase().includes(q) ||
-          o.pickupNo.toLowerCase().includes(q),
-      )
-    : orders.value;
-});
 function money(v: any) {
   return Number(v || 0).toFixed(2);
 }
@@ -244,16 +310,31 @@ function nextAction(s: string) {
     } as Record<string, { label: string; status: string }>
   )[s];
 }
-function openDetails(value: unknown) {
-  selected.value = value as Order;
+async function openDetails(value: unknown) {
+  const order = value as Order;
+  selected.value = order;
   drawer.value = true;
+  try {
+    selected.value = await api.order(order.id);
+  } catch (e: any) {
+    ElMessage.error(e.message || "订单详情加载失败");
+  }
 }
 async function load() {
   loading.value = true;
   try {
     if (status.value === "REFUNDS") refunds.value = await api.refunds();
     else {
-      const data = await api.orders(status.value, page.value);
+      const data = await api.orders({
+        status: status.value,
+        keyword: filters.keyword.trim(),
+        orderType: filters.orderType,
+        tableId: filters.tableId,
+        startAt: filters.dateRange?.[0].toISOString(),
+        endAt: filters.dateRange?.[1].toISOString(),
+        page: page.value,
+        pageSize: 20,
+      });
       orders.value = data.list;
       total.value = data.total;
     }
@@ -267,6 +348,14 @@ function changeStatus() {
   page.value = 1;
   load();
 }
+function applyFilters() {
+  page.value = 1;
+  load();
+}
+function resetFilters() {
+  Object.assign(filters, { keyword: "", orderType: "", tableId: undefined, dateRange: null });
+  applyFilters();
+}
 async function advance(value: unknown) {
   const order = value as Order;
   const action = nextAction(order.status);
@@ -274,9 +363,34 @@ async function advance(value: unknown) {
   try {
     await api.updateOrderStatus(order.id, action.status);
     ElMessage.success(`订单已${action.label}`);
-    load();
+    await load();
+    if (drawer.value) selected.value = await api.order(order.id);
   } catch (e: any) {
     ElMessage.error(e.message || "操作失败");
+  }
+}
+async function syncRefund(row: any) {
+  syncingRefundId.value = row.id;
+  try {
+    await api.syncRefund(row.id);
+    ElMessage.success("退款状态已同步");
+    await load();
+  } catch (e: any) {
+    ElMessage.error(e.message || "退款状态同步失败");
+  } finally {
+    syncingRefundId.value = undefined;
+  }
+}
+async function reprintSelected() {
+  if (!selected.value) return;
+  printing.value = true;
+  try {
+    await api.reprintOrder(selected.value.id);
+    ElMessage.success("打印任务已提交");
+  } catch (e: any) {
+    ElMessage.error(e.message || "重新打印失败");
+  } finally {
+    printing.value = false;
   }
 }
 async function approveRefund(row: any) {
@@ -326,7 +440,14 @@ function refundText(s: string) {
     )[s] || s
   );
 }
+function statusText(status: string) {
+  return ({ UNPAID: "待支付", PAID: "待接单", MAKING: "制作中", READY: "待取餐", COMPLETED: "已完成", REFUNDING: "退款中", REFUNDED: "已退款", CANCELLED: "已取消" } as Record<string, string>)[status] || status;
+}
+function sourceText(source: string) {
+  return ({ CUSTOMER: "顾客操作", ADMIN: "后台操作", WECHAT: "微信支付", MOCK: "模拟支付", SYSTEM: "系统", MIGRATION: "历史记录" } as Record<string, string>)[source] || source;
+}
 onMounted(() => {
+  api.tables().then((value) => (tables.value = value)).catch(() => undefined);
   load();
   timer = window.setInterval(load, 10000);
 });

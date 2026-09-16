@@ -406,6 +406,81 @@ async function main() {
     }
   });
 
+  await check("桌面后台扩展接口", async () => {
+    const members = await call("/admin/members?page=1&pageSize=20", { token: globalThis.adminToken });
+    if (!Array.isArray(members.list) || typeof members.total !== "number") throw new Error("会员分页异常");
+    if (members.list.some((item) => item.phone && !item.phone.includes("****"))) throw new Error("会员手机号未脱敏");
+    const system = await call("/admin/system/status", { token: globalThis.adminToken });
+    if (typeof system.database !== "boolean" || !system.checkedAt) throw new Error("系统状态异常");
+    const alerts = await call("/admin/alerts", { token: globalThis.adminToken });
+    if (typeof alerts.failedRefunds !== "number") throw new Error("异常提醒数据异常");
+    const detail = await call(`/admin/orders/${globalThis.orderId}`, { token: globalThis.adminToken });
+    if (!Array.isArray(detail.statusLogs) || detail.statusLogs.length < 2) throw new Error("订单状态日志缺失");
+  });
+
+  await check("营销规则服务端计价", async () => {
+    const promotion = await call("/admin/promotions", {
+      method: "POST",
+      token: globalThis.adminToken,
+      body: {
+        name: `冒烟满减${Date.now()}`,
+        type: "FULL_REDUCTION",
+        config: { threshold: 0.02, reduction: 0.01 },
+        isActive: true,
+      },
+    });
+    try {
+      const order = await call("/orders", {
+        method: "POST",
+        token: globalThis.userToken,
+        body: {
+          orderType: "TAKEOUT",
+          clientRequestId: `promo_${Date.now()}`,
+          items: [{ productId: globalThis.firstProductId, quantity: 1, specs: defaultSpecs(globalThis.firstProduct) }],
+        },
+      });
+      if (Number(order.discountAmount) !== 0.01) throw new Error(`优惠金额=${order.discountAmount}`);
+      if (!order.promotionName) throw new Error("订单未记录活动名称");
+    } finally {
+      await call(`/admin/promotions/${promotion.id}`, { method: "DELETE", token: globalThis.adminToken });
+    }
+  });
+
+  await check("商品批量操作", async () => {
+    const result = await call("/admin/products/batch", {
+      method: "PATCH",
+      token: globalThis.adminToken,
+      body: { ids: [globalThis.firstProductId], isActive: true },
+    });
+    if (result.count !== 1) throw new Error(`更新数量=${result.count}`);
+  });
+
+  await check("商品排序与临时售罄恢复时间", async () => {
+    const products = await call("/admin/products", { token: globalThis.adminToken });
+    await call("/admin/products/reorder", {
+      method: "POST",
+      token: globalThis.adminToken,
+      body: { ids: products.map((item) => item.id) },
+    });
+    const original = products.find((item) => item.id === globalThis.firstProductId);
+    const until = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const updated = await call(`/admin/products/${globalThis.firstProductId}`, {
+      method: "PUT",
+      token: globalThis.adminToken,
+      body: { isSoldOut: true, soldOutUntil: until },
+    });
+    if (!updated.isSoldOut || !updated.soldOutUntil)
+      throw new Error("临时售罄恢复时间未保存");
+    await call(`/admin/products/${globalThis.firstProductId}`, {
+      method: "PUT",
+      token: globalThis.adminToken,
+      body: {
+        isSoldOut: original.isSoldOut,
+        soldOutUntil: original.soldOutUntil || null,
+      },
+    });
+  });
+
   await check("管理员创建与权限隔离", async () => {
     const uname = `staff_${Date.now()}`;
     const created = await call("/admin/admins", {

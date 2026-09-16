@@ -11,6 +11,7 @@ import {
   wxPayConfigured,
 } from "./wechat.js";
 import { confirmWechatPayment, submitWechatRefund } from "./payment.js";
+import { applyBestPromotion } from "./promotion.js";
 
 export type OrderStatus =
   | "UNPAID"
@@ -39,6 +40,7 @@ const orderInclude = {
   table: true,
   payments: true,
   refunds: true,
+  statusLogs: { orderBy: { createdAt: "asc" as const } },
 } satisfies Prisma.OrderInclude;
 
 async function createOrderInternal(input: CreateOrderInput) {
@@ -126,8 +128,10 @@ async function createOrderInternal(input: CreateOrderInput) {
       subtotal: Math.round(unitPrice * quantity * 100) / 100,
     };
   });
-  const totalAmount =
+  const originalAmount =
     Math.round((items.reduce((s, i) => s + i.subtotal, 0) + packFee) * 100) / 100;
+  const promotion = await applyBestPromotion(input.userId, originalAmount);
+  const totalAmount = Math.max(0, Math.round((originalAmount - promotion.discount) * 100) / 100);
 
   let tableId: number | null = input.tableId ?? null;
   if (input.orderType === "DINE_IN" && !tableId) {
@@ -155,10 +159,14 @@ async function createOrderInternal(input: CreateOrderInput) {
           orderType: input.orderType,
           status: "UNPAID",
           totalAmount,
+          originalAmount,
+          discountAmount: promotion.discount,
+          promotionName: promotion.name || null,
           packFee,
           remark: input.remark || null,
           phone: input.phone || null,
           items: { create: items },
+          statusLogs: { create: { status: "UNPAID", source: "CUSTOMER" } },
         },
         include: orderInclude,
       });
@@ -212,6 +220,7 @@ export async function mockPay(orderId: number, userId?: number) {
     await tx.payment.create({
       data: { orderId, amount: order.totalAmount, channel: "MOCK", status: "SUCCESS" },
     });
+    await tx.orderStatusLog.create({ data: { orderId, status: "PAID", source: "MOCK" } });
   });
   const updated = await prisma.order.findUnique({
     where: { id: orderId },
@@ -265,9 +274,15 @@ export async function transitionOrder(orderId: number, status: OrderStatus) {
     if (!closed) throw new Error("订单已支付，不能取消");
   }
   // 原子条件更新：两个店员同时接单/出餐时只有一个成功
-  const updated = await prisma.order.updateMany({
-    where: { id: orderId, status: order.status },
-    data: { status },
+  const updated = await prisma.$transaction(async (tx) => {
+    const changed = await tx.order.updateMany({
+      where: { id: orderId, status: order.status },
+      data: { status },
+    });
+    if (changed.count) {
+      await tx.orderStatusLog.create({ data: { orderId, status, source: "ADMIN" } });
+    }
+    return changed;
   });
   if (updated.count === 0) {
     throw new Error("订单状态已被其他操作更新，请刷新后重试");
@@ -282,6 +297,13 @@ export async function transitionOrder(orderId: number, status: OrderStatus) {
   return result;
 }
 
+export async function restoreScheduledProducts() {
+  return prisma.product.updateMany({
+    where: { isSoldOut: true, soldOutUntil: { lte: new Date() } },
+    data: { isSoldOut: false, soldOutUntil: null },
+  });
+}
+
 export async function cancelUnpaidOrder(orderId: number, userId: number) {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new Error("订单不存在");
@@ -289,9 +311,13 @@ export async function cancelUnpaidOrder(orderId: number, userId: number) {
   if (order.status !== "UNPAID") throw new Error("当前订单不可取消");
   const closed = await closeUnpaidWechatOrder(order.orderNo);
   if (!closed) throw new Error("订单已支付，不能取消");
-  const updated = await prisma.order.updateMany({
-    where: { id: order.id, userId, status: "UNPAID" },
-    data: { status: "CANCELLED" },
+  const updated = await prisma.$transaction(async (tx) => {
+    const changed = await tx.order.updateMany({
+      where: { id: order.id, userId, status: "UNPAID" },
+      data: { status: "CANCELLED" },
+    });
+    if (changed.count) await tx.orderStatusLog.create({ data: { orderId, status: "CANCELLED", source: "CUSTOMER" } });
+    return changed;
   });
   if (updated.count !== 1) throw new Error("订单状态已变化，请刷新后重试");
   return prisma.order.findUnique({ where: { id: order.id }, include: orderInclude });
@@ -323,6 +349,7 @@ export async function requestRefund(
       data: { status: "REFUNDING" },
     });
     if (claimed.count !== 1) throw new Error("订单状态已变化，请刷新后重试");
+    await tx.orderStatusLog.create({ data: { orderId, status: "REFUNDING", source: "CUSTOMER" } });
     await tx.refund.create({
       data: { orderId, reason: normalizedReason, statusBefore: order.status },
     });
@@ -365,6 +392,7 @@ export async function handleRefund(
         where: { id: refund.orderId, status: "REFUNDING" },
         data: { status: refund.statusBefore },
       });
+      await tx.orderStatusLog.create({ data: { orderId: refund.orderId, status: refund.statusBefore, source: "ADMIN" } });
       return true;
     });
     if (!updated) throw new Error("退款申请已被其他操作处理，请刷新后重试");
@@ -384,9 +412,13 @@ export async function cancelStaleOrders() {
     try {
       const closed = await closeUnpaidWechatOrder(o.orderNo);
       if (!closed) continue;
-      const updated = await prisma.order.updateMany({
-        where: { id: o.id, status: "UNPAID" },
-        data: { status: "CANCELLED" },
+      const updated = await prisma.$transaction(async (tx) => {
+        const changed = await tx.order.updateMany({
+          where: { id: o.id, status: "UNPAID" },
+          data: { status: "CANCELLED" },
+        });
+        if (changed.count) await tx.orderStatusLog.create({ data: { orderId: o.id, status: "CANCELLED", source: "SYSTEM" } });
+        return changed;
       });
       cancelled += updated.count;
     } catch (error: any) {

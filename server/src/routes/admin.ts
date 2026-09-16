@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 import QRCode from "qrcode";
 import { prisma } from "../lib/prisma.js";
 import { num, str } from "../lib/validate.js";
@@ -14,15 +15,20 @@ import { loginLimiter } from "../middleware/rateLimit.js";
 import { logAudit } from "../lib/audit.js";
 import { handleRefund, transitionOrder } from "../services/order.js";
 import { syncWechatRefund } from "../services/payment.js";
-import { createUnlimitedMiniProgramCode } from "../services/wechat.js";
+import { createUnlimitedMiniProgramCode, getWechatReadiness } from "../services/wechat.js";
+import { printOrder } from "../services/printer.js";
 import {
   hourlyDistribution,
+  hourlyDistributionBetween,
   productRanking,
+  productRankingBetween,
   summary,
   todayStats,
   trend,
   categoryShare,
+  categoryShareBetween,
   refundStats,
+  customOverview,
 } from "../services/stats.js";
 
 const router = Router();
@@ -142,16 +148,67 @@ router.get("/audit-logs", requireAdmin, requireManager, async (req, res) => {
   ok(res, logs);
 });
 
+router.get("/system/status", requireAdmin, requireManager, async (_req, res) => {
+  const checkedAt = new Date();
+  let database = false;
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    database = true;
+  } catch {
+    database = false;
+  }
+  let disk: { totalBytes: number; freeBytes: number; usedPercent: number } | null = null;
+  try {
+    const stats = fs.statfsSync(process.cwd());
+    const totalBytes = Number(stats.blocks) * Number(stats.bsize);
+    const freeBytes = Number(stats.bavail) * Number(stats.bsize);
+    disk = { totalBytes, freeBytes, usedPercent: totalBytes ? Math.round((1 - freeBytes / totalBytes) * 1000) / 10 : 0 };
+  } catch {
+    disk = null;
+  }
+  const backupDir = process.env.BACKUP_DIR || path.resolve(process.cwd(), "backups");
+  let latestBackupAt: string | null = null;
+  try {
+    const entries = fs.readdirSync(backupDir).map((name) => fs.statSync(path.join(backupDir, name)).mtimeMs);
+    if (entries.length) latestBackupAt = new Date(Math.max(...entries)).toISOString();
+  } catch {
+    latestBackupAt = null;
+  }
+  ok(res, {
+    checkedAt: checkedAt.toISOString(),
+    database,
+    uptimeSeconds: Math.round(process.uptime()),
+    memory: { rssBytes: process.memoryUsage().rss, totalBytes: os.totalmem(), freeBytes: os.freemem() },
+    disk,
+    latestBackupAt,
+    environment: process.env.NODE_ENV || "development",
+    printerEnabled: process.env.PRINTER_ENABLED === "true",
+    wechat: getWechatReadiness(),
+  });
+});
+
 router.get("/stats/today", requireAdmin, async (_req, res) => ok(res, await todayStats()));
 router.get("/stats/summary", requireAdmin, async (req, res) => {
   const unit = (str(req.query.range) || "today") as "today" | "week" | "month";
   ok(res, await summary(unit));
 });
 router.get("/stats/products", requireAdmin, async (req, res) => {
+  if (req.query.startAt && req.query.endAt) {
+    const start = new Date(str(req.query.startAt));
+    const end = new Date(str(req.query.endAt));
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) return fail(res, "统计时间范围不正确");
+    return ok(res, await productRankingBetween(start, end));
+  }
   const unit = (str(req.query.range) || "today") as "today" | "week" | "month";
   ok(res, await productRanking(unit));
 });
 router.get("/stats/hours", requireAdmin, async (req, res) => {
+  if (req.query.startAt && req.query.endAt) {
+    const start = new Date(str(req.query.startAt));
+    const end = new Date(str(req.query.endAt));
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) return fail(res, "统计时间范围不正确");
+    return ok(res, await hourlyDistributionBetween(start, end));
+  }
   const date = req.query.date ? new Date(str(req.query.date)) : new Date();
   ok(res, await hourlyDistribution(date));
 });
@@ -162,6 +219,12 @@ router.get("/stats/trend", requireAdmin, async (req, res) => {
 });
 
 router.get("/stats/categories", requireAdmin, async (req, res) => {
+  if (req.query.startAt && req.query.endAt) {
+    const start = new Date(str(req.query.startAt));
+    const end = new Date(str(req.query.endAt));
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) return fail(res, "统计时间范围不正确");
+    return ok(res, await categoryShareBetween(start, end));
+  }
   const unit = (str(req.query.range) || "today") as "today" | "week" | "month";
   ok(res, await categoryShare(unit));
 });
@@ -171,11 +234,169 @@ router.get("/stats/refunds", requireAdmin, async (req, res) => {
   ok(res, await refundStats(unit));
 });
 
-router.get("/orders", requireAdmin, async (req, res) => {
-  const status = str(req.query.status);
+router.get("/stats/overview", requireAdmin, async (req, res) => {
+  const start = new Date(str(req.query.startAt));
+  const end = new Date(str(req.query.endAt));
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) {
+    return fail(res, "统计时间范围不正确");
+  }
+  if (end.getTime() - start.getTime() > 366 * 86400000) return fail(res, "统计范围不能超过 366 天");
+  ok(res, await customOverview(start, end));
+});
+
+router.get("/members", requireAdmin, async (req, res) => {
+  const keyword = str(req.query.keyword).trim();
   const page = Math.max(1, num(req.query.page, 1));
   const pageSize = Math.min(50, Math.max(1, num(req.query.pageSize, 20)));
-  const where = status ? { status: status as any } : {};
+  const where: Record<string, unknown> = { status: "ACTIVE" };
+  if (keyword) {
+    where.OR = [
+      { nickname: { contains: keyword } },
+      { phone: { contains: keyword } },
+    ];
+  }
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        orders: {
+          orderBy: { createdAt: "desc" },
+          include: { items: true, refunds: true },
+        },
+      },
+    }),
+    prisma.user.count({ where }),
+  ]);
+  const paidStatuses = new Set(["PAID", "MAKING", "READY", "COMPLETED", "REFUNDED"]);
+  const list = users.map((user) => {
+    const paidOrders = user.orders.filter((order) => paidStatuses.has(order.status));
+    const totalSpent = paidOrders.reduce(
+      (sum, order) => sum + (order.status === "REFUNDED" ? 0 : Number(order.totalAmount)),
+      0
+    );
+    const refundCount = user.orders.reduce(
+      (sum, order) => sum + order.refunds.filter((refund) => refund.status === "SUCCESS").length,
+      0
+    );
+    const phone = user.phone
+      ? `${user.phone.slice(0, 3)}****${user.phone.slice(-4)}`
+      : null;
+    return {
+      id: user.id,
+      nickname: user.nickname || `顾客 ${user.id}`,
+      phone,
+      phoneVerified: user.phoneVerified,
+      createdAt: user.createdAt,
+      totalSpent: Math.round(totalSpent * 100) / 100,
+      orderCount: paidOrders.length,
+      avgTicket: paidOrders.length ? Math.round((totalSpent / paidOrders.length) * 100) / 100 : 0,
+      refundCount,
+      lastOrderAt: paidOrders[0]?.createdAt ?? null,
+      recentOrders: paidOrders.slice(0, 5).map((order) => ({
+        id: order.id,
+        orderNo: order.orderNo,
+        createdAt: order.createdAt,
+        totalAmount: Number(order.totalAmount),
+        status: order.status,
+        items: order.items.map((item) => ({ productName: item.productName, quantity: item.quantity })),
+      })),
+    };
+  });
+  ok(res, { list, total, page, pageSize });
+});
+
+router.get("/promotions", requireAdmin, async (_req, res) => {
+  const rows = await prisma.promotion.findMany({ orderBy: { createdAt: "desc" } });
+  ok(res, rows.map((row) => ({ ...row, config: parseJson(row.config, {}) })));
+});
+
+function promotionData(body: any) {
+  const name = str(body?.name).trim();
+  const type = str(body?.type);
+  const allowed = ["FULL_REDUCTION", "PERCENT", "NEW_CUSTOMER", "MEMBER_DAY"];
+  if (!name || !allowed.includes(type)) throw new Error("活动名称或类型不正确");
+  const config = body?.config && typeof body.config === "object" ? body.config : {};
+  if (type === "FULL_REDUCTION") {
+    if (num(config.threshold) <= 0 || num(config.reduction) <= 0 || num(config.reduction) >= num(config.threshold)) {
+      throw new Error("满减门槛与优惠金额不正确");
+    }
+  } else if (type === "NEW_CUSTOMER") {
+    if (num(config.reduction) <= 0) throw new Error("新客优惠金额必须大于 0");
+  } else {
+    const rate = Number(config.rate);
+    if (!(rate > 0 && rate < 1)) throw new Error("折扣比例必须在 0–1 之间");
+    if (type === "MEMBER_DAY" && (!Array.isArray(config.weekdays) || !config.weekdays.length)) {
+      throw new Error("请选择会员日");
+    }
+  }
+  const startsAt = body.startsAt ? new Date(str(body.startsAt)) : null;
+  const endsAt = body.endsAt ? new Date(str(body.endsAt)) : null;
+  if ((startsAt && Number.isNaN(startsAt.getTime())) || (endsAt && Number.isNaN(endsAt.getTime()))) {
+    throw new Error("活动时间格式不正确");
+  }
+  if (startsAt && endsAt && startsAt >= endsAt) throw new Error("结束时间必须晚于开始时间");
+  return { name, type, config: stringifyJson(config), startsAt, endsAt, isActive: body.isActive !== false };
+}
+
+router.post("/promotions", requireAdmin, requireManager, async (req, res) => {
+  try {
+    const promotion = await prisma.promotion.create({ data: promotionData(req.body) });
+    await logAudit((req as any).admin.id, "PROMOTION_CREATE", "Promotion", promotion.id, promotion.name);
+    ok(res, { ...promotion, config: parseJson(promotion.config, {}) }, "营销活动已创建");
+  } catch (error: any) {
+    fail(res, error?.message || "创建失败");
+  }
+});
+
+router.put("/promotions/:id", requireAdmin, requireManager, async (req, res) => {
+  try {
+    const promotion = await prisma.promotion.update({ where: { id: num(req.params.id) }, data: promotionData(req.body) });
+    await logAudit((req as any).admin.id, "PROMOTION_UPDATE", "Promotion", promotion.id, promotion.name);
+    ok(res, { ...promotion, config: parseJson(promotion.config, {}) }, "营销活动已更新");
+  } catch (error: any) {
+    fail(res, error?.message || "更新失败");
+  }
+});
+
+router.delete("/promotions/:id", requireAdmin, requireManager, async (req, res) => {
+  const id = num(req.params.id);
+  await prisma.promotion.delete({ where: { id } });
+  await logAudit((req as any).admin.id, "PROMOTION_DELETE", "Promotion", id);
+  ok(res, null, "营销活动已删除");
+});
+
+router.get("/orders", requireAdmin, async (req, res) => {
+  const status = str(req.query.status);
+  const keyword = str(req.query.keyword).trim();
+  const orderType = str(req.query.orderType);
+  const tableId = req.query.tableId ? num(req.query.tableId) : undefined;
+  const startAt = req.query.startAt ? new Date(str(req.query.startAt)) : undefined;
+  const endAt = req.query.endAt ? new Date(str(req.query.endAt)) : undefined;
+  const page = Math.max(1, num(req.query.page, 1));
+  const pageSize = Math.min(50, Math.max(1, num(req.query.pageSize, 20)));
+  const where: Record<string, unknown> = {};
+  if (status) where.status = status;
+  if (orderType === "DINE_IN" || orderType === "TAKEOUT") where.orderType = orderType;
+  if (tableId) where.tableId = tableId;
+  if (keyword) {
+    where.OR = [
+      { orderNo: { contains: keyword } },
+      { pickupNo: { contains: keyword } },
+      { phone: { endsWith: keyword } },
+    ];
+  }
+  if (
+    (startAt && !Number.isNaN(startAt.getTime())) ||
+    (endAt && !Number.isNaN(endAt.getTime()))
+  ) {
+    where.createdAt = {
+      ...(startAt && !Number.isNaN(startAt.getTime()) ? { gte: startAt } : {}),
+      ...(endAt && !Number.isNaN(endAt.getTime()) ? { lte: endAt } : {}),
+    };
+  }
   const [list, total] = await Promise.all([
     prisma.order.findMany({
       where,
@@ -190,12 +411,35 @@ router.get("/orders", requireAdmin, async (req, res) => {
 });
 
 router.get("/orders/:id", requireAdmin, async (req, res) => {
+  const id = num(req.params.id);
   const order = await prisma.order.findUnique({
-    where: { id: num(req.params.id) },
-    include: { items: true, table: true, payments: true, refunds: { include: { admin: true } } },
+    where: { id },
+    include: {
+      items: true,
+      table: true,
+      payments: true,
+      statusLogs: { orderBy: { createdAt: "asc" } },
+      refunds: { include: { admin: { select: { username: true } } } },
+    },
   });
   if (!order) return fail(res, "订单不存在");
-  ok(res, serializeOrder(order));
+  const auditLogs = await prisma.auditLog.findMany({
+    where: { targetType: "Order", targetId: id },
+    orderBy: { createdAt: "asc" },
+    include: { admin: { select: { username: true } } },
+  });
+  ok(res, { ...serializeOrder(order), auditLogs });
+});
+
+router.get("/alerts", requireAdmin, async (_req, res) => {
+  const overdueBefore = new Date(Date.now() - 20 * 60 * 1000);
+  const [failedRefunds, overduePaid, overdueMaking, paymentFailures] = await Promise.all([
+    prisma.refund.count({ where: { status: "FAILED" } }),
+    prisma.order.count({ where: { status: "PAID", paidAt: { lte: overdueBefore } } }),
+    prisma.order.count({ where: { status: "MAKING", updatedAt: { lte: overdueBefore } } }),
+    prisma.payment.count({ where: { status: { not: "SUCCESS" }, createdAt: { gte: new Date(Date.now() - 86400000) } } }),
+  ]);
+  ok(res, { failedRefunds, overduePaid, overdueMaking, paymentFailures });
 });
 
 router.patch("/orders/:id/status", requireAdmin, async (req, res) => {
@@ -205,6 +449,21 @@ router.patch("/orders/:id/status", requireAdmin, async (req, res) => {
     ok(res, serializeOrder(order), "状态已更新");
   } catch (e: any) {
     fail(res, e?.message || "状态更新失败");
+  }
+});
+
+router.post("/orders/:id/print", requireAdmin, async (req, res) => {
+  const order = await prisma.order.findUnique({
+    where: { id: num(req.params.id) },
+    include: { items: true, table: true },
+  });
+  if (!order) return fail(res, "订单不存在");
+  try {
+    await printOrder(order);
+    await logAudit((req as any).admin.id, "ORDER_REPRINT", "Order", order.id, order.orderNo);
+    ok(res, null, "打印任务已提交");
+  } catch (e: any) {
+    fail(res, e?.message || "打印任务提交失败");
   }
 });
 
@@ -268,6 +527,14 @@ router.post("/categories", requireAdmin, requireManager, async (req, res) => {
   ok(res, category, "分类已创建");
 });
 
+router.post("/categories/reorder", requireAdmin, requireManager, async (req, res) => {
+  const ids: number[] = Array.isArray(req.body?.ids) ? req.body.ids.map((value: unknown) => num(value)).filter((id: number) => id > 0) : [];
+  if (!ids.length) return fail(res, "排序数据不能为空");
+  await prisma.$transaction(ids.map((id, index) => prisma.category.update({ where: { id }, data: { sortOrder: index } })));
+  await logAudit((req as any).admin.id, "CATEGORY_REORDER", "Category", undefined, `count=${ids.length}`);
+  ok(res, { count: ids.length }, "分类排序已保存");
+});
+
 router.put("/categories/:id", requireAdmin, requireManager, async (req, res) => {
   const category = await prisma.category.update({
     where: { id: num(req.params.id) },
@@ -321,6 +588,8 @@ router.get("/products", requireAdmin, async (req, res) => {
 router.post("/products", requireAdmin, requireManager, async (req, res) => {
   const body = req.body ?? {};
   if (!str(body.name).trim()) return fail(res, "商品名称不能为空");
+  const soldOutUntil = body.isSoldOut === true && body.soldOutUntil ? new Date(str(body.soldOutUntil)) : null;
+  if (soldOutUntil && Number.isNaN(soldOutUntil.getTime())) return fail(res, "恢复时间格式不正确");
   const specGroupIds = Array.isArray(body.specGroupIds) ? body.specGroupIds : [];
   const product = await prisma.product.create({
     data: {
@@ -337,6 +606,7 @@ router.post("/products", requireAdmin, requireManager, async (req, res) => {
       isHot: body.isHot === true,
       sortOrder: num(body.sortOrder),
       isSoldOut: body.isSoldOut === true,
+      soldOutUntil,
       isActive: body.isActive !== false,
       specGroups: {
         create: specGroupIds.map((s: any, idx: number) => ({
@@ -352,9 +622,34 @@ router.post("/products", requireAdmin, requireManager, async (req, res) => {
   ok(res, serializeProduct(product), "商品已创建");
 });
 
+router.patch("/products/batch", requireAdmin, requireManager, async (req, res) => {
+  const ids: number[] = Array.isArray(req.body?.ids)
+    ? [...new Set<number>(req.body.ids.map((value: unknown) => num(value)).filter((id: number) => id > 0))]
+    : [];
+  if (!ids.length) return fail(res, "请选择商品");
+  const data: Record<string, unknown> = {};
+  if (typeof req.body?.isActive === "boolean") data.isActive = req.body.isActive;
+  if (typeof req.body?.isSoldOut === "boolean") data.isSoldOut = req.body.isSoldOut;
+  if (req.body?.categoryId !== undefined) data.categoryId = num(req.body.categoryId);
+  if (!Object.keys(data).length) return fail(res, "没有可更新的字段");
+  const result = await prisma.product.updateMany({ where: { id: { in: ids } }, data });
+  await logAudit((req as any).admin.id, "PRODUCT_BATCH_UPDATE", "Product", undefined, `count=${result.count}`);
+  ok(res, { count: result.count }, "商品已批量更新");
+});
+
+router.post("/products/reorder", requireAdmin, requireManager, async (req, res) => {
+  const ids: number[] = Array.isArray(req.body?.ids) ? req.body.ids.map((value: unknown) => num(value)).filter((id: number) => id > 0) : [];
+  if (!ids.length) return fail(res, "排序数据不能为空");
+  await prisma.$transaction(ids.map((id, index) => prisma.product.update({ where: { id }, data: { sortOrder: index } })));
+  await logAudit((req as any).admin.id, "PRODUCT_REORDER", "Product", undefined, `count=${ids.length}`);
+  ok(res, { count: ids.length }, "商品排序已保存");
+});
+
 router.put("/products/:id", requireAdmin, requireManager, async (req, res) => {
   const body = req.body ?? {};
   const id = num(req.params.id);
+  const soldOutUntil = body.soldOutUntil ? new Date(str(body.soldOutUntil)) : null;
+  if (body.soldOutUntil && Number.isNaN(soldOutUntil?.getTime())) return fail(res, "恢复时间格式不正确");
   const specGroupIds = Array.isArray(body.specGroupIds) ? body.specGroupIds : undefined;
   const product = await prisma.$transaction(async (tx) => {
     if (specGroupIds) {
@@ -376,6 +671,12 @@ router.put("/products/:id", requireAdmin, requireManager, async (req, res) => {
         isHot: typeof body.isHot === "boolean" ? body.isHot : undefined,
         sortOrder: body.sortOrder !== undefined ? num(body.sortOrder) : undefined,
         isSoldOut: typeof body.isSoldOut === "boolean" ? body.isSoldOut : undefined,
+        soldOutUntil:
+          body.soldOutUntil !== undefined
+            ? body.isSoldOut === false || !body.soldOutUntil
+              ? null
+              : soldOutUntil
+            : undefined,
         isActive: typeof body.isActive === "boolean" ? body.isActive : undefined,
         specGroups: specGroupIds
           ? {
@@ -395,9 +696,12 @@ router.put("/products/:id", requireAdmin, requireManager, async (req, res) => {
 });
 
 router.patch("/products/:id/sold-out", requireAdmin, async (req, res) => {
+  const soldOut = req.body?.soldOut === true;
+  const until = soldOut && req.body?.soldOutUntil ? new Date(str(req.body.soldOutUntil)) : null;
+  if (until && Number.isNaN(until.getTime())) return fail(res, "恢复时间格式不正确");
   const product = await prisma.product.update({
     where: { id: num(req.params.id) },
-    data: { isSoldOut: req.body?.soldOut === true },
+    data: { isSoldOut: soldOut, soldOutUntil: until },
   });
   await logAudit((req as any).admin.id, "PRODUCT_SOLDOUT", "Product", product.id, String(product.isSoldOut));
   ok(res, serializeProduct(product), product.isSoldOut ? "已标记售罄" : "已恢复在售");
@@ -554,6 +858,30 @@ router.post("/takeout-miniprogram-code", requireAdmin, async (_req, res) => {
   const file = path.join(dir, "takeout.png");
   fs.writeFileSync(file, image);
   ok(res, { qrUrl: "/uploads/miniprogram-codes/takeout.png", scene: "takeout" }, "外带小程序码已生成");
+});
+
+router.post("/tables/miniprogram-codes", requireAdmin, requireManager, async (req, res) => {
+  const ids: number[] = Array.isArray(req.body?.ids)
+    ? [...new Set<number>(req.body.ids.map((value: unknown) => num(value)).filter((id: number) => id > 0))]
+    : [];
+  if (!ids.length || ids.length > 50) return fail(res, "请选择 1–50 个桌台");
+  const tables = await prisma.tableInfo.findMany({ where: { id: { in: ids } } });
+  const dir = path.resolve(process.cwd(), "uploads/miniprogram-codes");
+  fs.mkdirSync(dir, { recursive: true });
+  const results: Array<{ id: number; tableNo: string; qrUrl?: string; error?: string }> = [];
+  for (const table of tables) {
+    try {
+      const image = await createUnlimitedMiniProgramCode(`table_${table.id}`);
+      const qrUrl = `/uploads/miniprogram-codes/table-${table.id}.png`;
+      fs.writeFileSync(path.join(dir, `table-${table.id}.png`), image);
+      await prisma.tableInfo.update({ where: { id: table.id }, data: { qrCodeUrl: qrUrl } });
+      results.push({ id: table.id, tableNo: table.tableNo, qrUrl });
+    } catch (error: any) {
+      results.push({ id: table.id, tableNo: table.tableNo, error: error?.message || "生成失败" });
+    }
+  }
+  await logAudit((req as any).admin.id, "TABLE_CODES_BATCH", "TableInfo", undefined, `count=${tables.length}`);
+  ok(res, results, "批量生成完成");
 });
 
 router.get("/settings", requireAdmin, requireManager, async (_req, res) => {

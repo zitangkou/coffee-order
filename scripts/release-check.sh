@@ -34,6 +34,7 @@ bash -n "$ROOT_DIR/deploy.sh" \
   "$ROOT_DIR/deploy/init-config.sh" \
   "$ROOT_DIR/deploy/update-env.sh" \
   "$ROOT_DIR/deploy/setup-https.sh"
+bash -n "$ROOT_DIR/scripts/admin-production-check.sh"
 
 echo "[release-check] Docker 一键部署安全回归"
 bash "$ROOT_DIR/scripts/deploy-safety.sh"

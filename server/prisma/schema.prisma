@@ -54,6 +54,20 @@ model ShopSetting {
   updatedAt            DateTime @updatedAt
 }
 
+model Promotion {
+  id        Int      @id @default(autoincrement())
+  name      String
+  type      String
+  config    String
+  startsAt  DateTime?
+  endsAt    DateTime?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, startsAt, endsAt])
+}
+
 model Category {
   id        Int       @id @default(autoincrement())
   name      String
@@ -78,6 +92,7 @@ model Product {
   isSignature Boolean            @default(false)
   isHot       Boolean            @default(false)
   isSoldOut   Boolean            @default(false)
+  soldOutUntil DateTime?
   isActive    Boolean            @default(true)
   sortOrder   Int                @default(0)
   createdAt   DateTime           @default(now())
@@ -193,6 +208,9 @@ model Order {
   orderType       String      @default("DINE_IN")
   status          String      @default("UNPAID")
   totalAmount     Float
+  originalAmount  Float       @default(0)
+  discountAmount  Float       @default(0)
+  promotionName   String?
   packFee         Float       @default(0)
   remark          String?
   phone           String?
@@ -204,9 +222,21 @@ model Order {
   items           OrderItem[]
   payments        Payment[]
   refunds         Refund[]
+  statusLogs      OrderStatusLog[]
 
   @@unique([userId, clientRequestId])
   @@index([status, createdAt])
+}
+
+model OrderStatusLog {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    String
+  source    String   @default("SYSTEM")
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
 }
 
 model DailySequence {

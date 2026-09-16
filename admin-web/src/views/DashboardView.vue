@@ -57,6 +57,10 @@
         <span class="live-dot" />订单工作台每 10 秒自动刷新
       </div>
     </section>
+    <section v-if="alertItems.length" class="operation-alerts">
+      <strong>需要关注</strong>
+      <button v-for="item in alertItems" :key="item.label" @click="goOrders(item.status)">{{ item.label }} {{ item.count }}</button>
+    </section>
     <section class="dashboard-grid">
       <article class="panel chart-panel">
         <div class="panel-title">
@@ -130,6 +134,13 @@ const stats = reactive<TodayStats>({
 const refunds = reactive({ count: 0, amount: 0 });
 const trend = ref<TrendPoint[]>([]);
 const ranking = ref<ProductRank[]>([]);
+const alerts = reactive({ failedRefunds: 0, overduePaid: 0, overdueMaking: 0, paymentFailures: 0 });
+const alertItems = computed(() => [
+  { label: "退款异常", count: alerts.failedRefunds, status: "REFUNDS" },
+  { label: "待接单超时", count: alerts.overduePaid, status: "PAID" },
+  { label: "制作超时", count: alerts.overdueMaking, status: "MAKING" },
+  { label: "支付异常", count: alerts.paymentFailures, status: "PAID" },
+].filter((item) => item.count > 0));
 const todayLabel = computed(() =>
   new Intl.DateTimeFormat("zh-CN", {
     year: "numeric",
@@ -200,16 +211,18 @@ function drawChart() {
 async function load() {
   loading.value = true;
   try {
-    const [s, t, r, rf] = await Promise.all([
+    const [s, t, r, rf, a] = await Promise.all([
       api.today(),
       api.trend(7),
       api.productsRank(),
       api.refundStats(),
+      api.alerts(),
     ]);
     Object.assign(stats, s);
     trend.value = t;
     ranking.value = r;
     Object.assign(refunds, rf);
+    Object.assign(alerts, a);
     await nextTick();
     drawChart();
   } catch (e: any) {
