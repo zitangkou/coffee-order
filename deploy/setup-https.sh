@@ -40,7 +40,8 @@ ACME_ROOT="/var/www/letsencrypt"
 $SUDO mkdir -p "$ACME_ROOT"
 
 BOOTSTRAP_FILE="$(mktemp)"
-trap 'rm -f "$BOOTSTRAP_FILE"' EXIT
+FINAL_FILE="$(mktemp)"
+trap 'rm -f "$BOOTSTRAP_FILE" "$FINAL_FILE"' EXIT
 sed \
   -e "s/__DOMAIN__/$DOMAIN/g" \
   -e "s/__HTTP_PORT__/${HTTP_PORT_VALUE:-8080}/g" \
@@ -69,12 +70,27 @@ fi
 sed \
   -e "s/nagacoffee\.site/$DOMAIN/g" \
   -e "s/127\.0\.0\.1:8080/127.0.0.1:${HTTP_PORT_VALUE:-8080}/g" \
-  deploy/nginx.conf > "$BOOTSTRAP_FILE"
-$SUDO cp "$BOOTSTRAP_FILE" "$SITE_FILE"
+  deploy/nginx.conf > "$FINAL_FILE"
+$SUDO cp "$FINAL_FILE" "$SITE_FILE"
 $SUDO nginx -t
 $SUDO systemctl reload nginx
 $SUDO systemctl enable --now certbot.timer 2>/dev/null || true
 
-curl -fsS --connect-timeout 10 --max-time 20 "https://$DOMAIN/api/health/ready" >/dev/null
+if ! curl -fsS --resolve "$DOMAIN:443:127.0.0.1" --connect-timeout 5 --max-time 15 \
+  "https://$DOMAIN/api/health/ready" >/dev/null; then
+  echo "[https] 本机 HTTPS 校验失败，正在恢复 HTTP 配置"
+  $SUDO cp "$BOOTSTRAP_FILE" "$SITE_FILE"
+  $SUDO nginx -t
+  $SUDO systemctl reload nginx
+  exit 1
+fi
+
+if ! curl -fsS --connect-timeout 10 --max-time 20 "https://$DOMAIN/api/health/ready" >/dev/null; then
+  echo "[https] 公网 HTTPS 尚不可达，可能是云安全组未放行 443；已恢复 HTTP 入口"
+  $SUDO cp "$BOOTSTRAP_FILE" "$SITE_FILE"
+  $SUDO nginx -t
+  $SUDO systemctl reload nginx
+  exit 1
+fi
 
 echo "[https] HTTPS 网关配置完成，并已通过 Nginx 配置检查"

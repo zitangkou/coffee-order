@@ -38,11 +38,12 @@ SITE_LINK="/etc/nginx/sites-enabled/coffee-admin-${DOMAIN}.conf"
 ACME_ROOT="/var/www/letsencrypt"
 $SUDO mkdir -p "$ACME_ROOT"
 
-rendered="$(mktemp)"
-trap 'rm -f "$rendered"' EXIT
+bootstrap_file="$(mktemp)"
+final_file="$(mktemp)"
+trap 'rm -f "$bootstrap_file" "$final_file"' EXIT
 sed -e "s/__ADMIN_DOMAIN__/$DOMAIN/g" -e "s/__ADMIN_HTTP_PORT__/${ADMIN_PORT:-8081}/g" \
-  deploy/nginx.admin.bootstrap.conf > "$rendered"
-$SUDO cp "$rendered" "$SITE_FILE"
+  deploy/nginx.admin.bootstrap.conf > "$bootstrap_file"
+$SUDO cp "$bootstrap_file" "$SITE_FILE"
 $SUDO ln -sfn "$SITE_FILE" "$SITE_LINK"
 $SUDO nginx -t
 $SUDO systemctl reload nginx
@@ -63,11 +64,26 @@ if [ ! -s "$CERT_DIR/fullchain.pem" ] || [ ! -s "$CERT_DIR/privkey.pem" ]; then
 fi
 
 sed -e "s/__ADMIN_DOMAIN__/$DOMAIN/g" -e "s/__ADMIN_HTTP_PORT__/${ADMIN_PORT:-8081}/g" \
-  deploy/nginx.admin.conf > "$rendered"
-$SUDO cp "$rendered" "$SITE_FILE"
+  deploy/nginx.admin.conf > "$final_file"
+$SUDO cp "$final_file" "$SITE_FILE"
 $SUDO nginx -t
 $SUDO systemctl reload nginx
 $SUDO systemctl enable --now certbot.timer 2>/dev/null || true
 
-curl -fsS --connect-timeout 10 --max-time 20 "https://$DOMAIN/api/health/ready" >/dev/null
+if ! curl -fsS --resolve "$DOMAIN:443:127.0.0.1" --connect-timeout 5 --max-time 15 \
+  "https://$DOMAIN/api/health/ready" >/dev/null; then
+  echo "[admin-https] 本机 HTTPS 校验失败，正在恢复 HTTP 配置"
+  $SUDO cp "$bootstrap_file" "$SITE_FILE"
+  $SUDO nginx -t
+  $SUDO systemctl reload nginx
+  exit 1
+fi
+
+if ! curl -fsS --connect-timeout 10 --max-time 20 "https://$DOMAIN/api/health/ready" >/dev/null; then
+  echo "[admin-https] 公网 HTTPS 尚不可达，可能是 DNS 或云安全组未生效；已恢复 HTTP 入口"
+  $SUDO cp "$bootstrap_file" "$SITE_FILE"
+  $SUDO nginx -t
+  $SUDO systemctl reload nginx
+  exit 1
+fi
 echo "[admin-https] 独立电脑管理端 HTTPS 配置完成"
